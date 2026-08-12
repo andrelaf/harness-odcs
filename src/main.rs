@@ -292,7 +292,15 @@ fn cmd_single(cfg: &Config, phase: Phase) -> Result<i32> {
         }
     };
 
-    let run_id = progress.run_id.clone().unwrap_or_else(trace::new_run_id);
+    // Reexecutar fora de um run em andamento abre um run novo. Reaproveitar o
+    // run_id anterior sobrescreveria a evidencia daquele run e escreveria num
+    // trace ja fechado: o resultado antigo sumiria em silencio, e comparar as
+    // duas execucoes — a razao de o historico existir — deixaria de ser
+    // possivel.
+    let run_id = match (&progress.run_id, progress.run_status) {
+        (Some(id), RunStatus::Running) => id.clone(),
+        _ => trace::new_run_id(),
+    };
     let tracer = Tracer::open(&cfg.trace_dir(), &run_id)?;
     let evidence_dir = cfg.evidence_dir().join(&run_id);
 
@@ -306,6 +314,20 @@ fn cmd_single(cfg: &Config, phase: Phase) -> Result<i32> {
         tool_seq: 0,
         notes: Vec::new(),
     };
+    run.progress.run_id = Some(run_id.clone());
+
+    // Envelope run_start/run_end tambem aqui: um arquivo de trace com formato
+    // proprio viraria caso especial para a derivacao de metricas da Semana 3.
+    run.tracer.emit(
+        "run_start",
+        Draft {
+            feature: Some(feature.id.clone()),
+            to: Some(phase.to_string()),
+            step: run.progress.step_count,
+            msg: format!("reexecucao de `{phase}`"),
+            ..Default::default()
+        },
+    )?;
 
     let started = std::time::Instant::now();
     let outcome = phases::execute(phase, &mut run);
@@ -330,10 +352,17 @@ fn cmd_single(cfg: &Config, phase: Phase) -> Result<i32> {
             ..Default::default()
         },
     )?;
+    let step = run.progress.step_count;
+    emit_run_end(&mut run, &feature.id, label, step)?;
+
+    run.progress.last_result = Some(label.to_string());
+    run.progress.last_transition_at = Some(trace::now_rfc3339());
 
     features = run.features.clone();
     features.save(&fl_path)?;
     run.progress.save(&pr_path)?;
+
+    println!("trace: {}", run.tracer.path().display());
 
     Ok(match outcome {
         Outcome::Pass => Exit::Pass.code(),

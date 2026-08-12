@@ -1,0 +1,34 @@
+# comando: git commit -m harness: handoff f1-validar -m run_id: 20260812T042006Z-363194
+passos: 7/12
+fases: start..handoff
+artefatos: state/, trace/, evidence/
+# --- stdout ---
+[feat/f1-validar 2f124dd] harness: handoff f1-validar
+ 27 files changed, 3663 insertions(+), 3 deletions(-)
+ create mode 100644 evidence/20260812T041646Z-b310dc/10-handoff-add.txt
+ create mode 100644 evidence/20260812T041646Z-b310dc/11-handoff-staged.txt
+ create mode 100644 evidence/20260812T041646Z-b310dc/12-handoff-commit.txt
+ create mode 100644 evidence/20260812T041646Z-b310dc/13-handoff-hash.txt
+ create mode 100644 evidence/20260812T041954Z-a69d54/01-bearings-branch.txt
+ create mode 100644 evidence/20260812T041954Z-a69d54/02-bearings-head.txt
+ create mode 100644 evidence/20260812T041954Z-a69d54/03-smoke-engine.txt
+ create mode 100644 evidence/20260812T041954Z-a69d54/04-smoke-imagem.txt
+ create mode 100644 evidence/20260812T041954Z-a69d54/05-smoke-git.txt
+ create mode 100644 evidence/20260812T041954Z-a69d54/06-pick-branch.txt
+ create mode 100644 evidence/20260812T041954Z-a69d54/07-verify-lint.txt
+ create mode 100644 evidence/20260812T041954Z-a69d54/f1-lint.json
+ create mode 100644 evidence/20260812T042006Z-363194/01-bearings-branch.txt
+ create mode 100644 evidence/20260812T042006Z-363194/02-bearings-head.txt
+ create mode 100644 evidence/20260812T042006Z-363194/03-smoke-engine.txt
+ create mode 100644 evidence/20260812T042006Z-363194/04-smoke-imagem.txt
+ create mode 100644 evidence/20260812T042006Z-363194/05-smoke-git.txt
+ create mode 100644 evidence/20260812T042006Z-363194/06-pick-branch.txt
+ create mode 100644 evidence/20260812T042006Z-363194/07-verify-lint.txt
+ create mode 100644 evidence/20260812T042006Z-363194/08-verify-relatorio.txt
+ create mode 100644 evidence/20260812T042006Z-363194/09-handoff-branch.txt
+ create mode 100644 evidence/20260812T042006Z-363194/f1-lint.json
+ create mode 100644 evidence/20260812T042006Z-363194/f1-relatorio.html
+ create mode 100644 trace/20260812T041954Z-a69d54.jsonl
+ create mode 100644 trace/20260812T042006Z-363194.jsonl
+
+# --- stderr ---

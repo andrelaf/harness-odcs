@@ -2,16 +2,22 @@
 //!
 //! Spec da feature: `docs/spec-f1-validar.md`.
 //!
-//! Divisao entre as duas fases: `implement` **produz** (resolve o contrato,
-//! registra identidade, gera o relatorio legivel), `verify` **julga** (roda o
-//! lint e le o veredito da saida em JSON). Manter o julgamento fora do
-//! `implement` e o que faz `./run.sh verify` valer sozinho: ele reexecuta a
-//! validacao inteira sem depender de nada que o run anterior tenha deixado em
-//! memoria.
+//! Divisao entre as duas fases: `implement` **prepara** (resolve o contrato e
+//! registra a identidade dele), `verify` **julga e comprova** (roda o lint, le
+//! o veredito e so entao materializa o relatorio legivel).
+//!
+//! O relatorio nasce em `verify`, e nao em `implement`, por um motivo achado no
+//! uso: `datacontract export html` valida o contrato antes de exportar. Gerar
+//! o relatorio antes do lint faria todo contrato invalido morrer em
+//! `implement`, com a mensagem de um exportador em vez do motivo da
+//! reprovacao — o julgamento aconteceria na fase errada, anunciado errado.
+//!
+//! Sobra `implement` fino, e isso e honesto: F1 e uma feature de verificacao. O
+//! trabalho dela **e** o veredito.
 
 use crate::flow::Outcome;
 use crate::phases::Run;
-use crate::tools;
+use crate::tools::{self, ToolOutcome};
 use anyhow::{Context, Result};
 use serde::Deserialize;
 use std::fs;
@@ -24,7 +30,7 @@ use std::fs;
 /// tipo de codigo costuma quebrar entre sistemas.
 const CONTRATO: &str = "contracts/clientes/contract.odcs.yaml";
 
-/// Resolve o contrato, registra a identidade dele e gera o relatorio legivel.
+/// Resolve o contrato e registra a identidade do que sera validado.
 pub fn implement(run: &mut Run) -> Outcome {
     let host = run.cfg.root.join(CONTRATO);
     let raw = match fs::read_to_string(&host) {
@@ -45,30 +51,11 @@ pub fn implement(run: &mut Run) -> Outcome {
         raw.len(),
         &sha[..16]
     ));
-
-    let destino = format!("evidence/{}/f1-relatorio.html", run.tracer.run_id());
-    if let Err(e) = fs::create_dir_all(&run.evidence_dir) {
-        return Outcome::Fail(format!("criando {}: {e}", run.evidence_dir.display()));
-    }
-
-    match run.datacontract(
-        "implement-relatorio",
-        &["export", "html", CONTRATO, "--output", &destino],
-    ) {
-        Ok(o) if o.ok() => {
-            run.note(format!("relatorio {destino}"));
-            Outcome::Pass
-        }
-        Ok(o) => Outcome::Fail(format!(
-            "`export html` saiu com {} ({})",
-            o.exit_code,
-            primeira_linha(&o.stderr)
-        )),
-        Err(e) => Outcome::Fail(format!("{e}")),
-    }
+    Outcome::Pass
 }
 
-/// Roda o lint contra o schema ODCS e devolve PASS/FAIL a partir do veredito.
+/// Roda o lint contra o schema ODCS, devolve PASS/FAIL a partir do veredito e,
+/// quando passa, deixa o relatorio legivel ao lado.
 pub fn verify(run: &mut Run) -> Outcome {
     let destino = format!("evidence/{}/f1-lint.json", run.tracer.run_id());
     if let Err(e) = fs::create_dir_all(&run.evidence_dir) {
@@ -116,7 +103,7 @@ pub fn verify(run: &mut Run) -> Outcome {
     ));
 
     if veredito.passed && saida.ok() {
-        Outcome::Pass
+        relatorio_legivel(run)
     } else if veredito.failures.is_empty() {
         // Veredito e exit code discordando e defeito de integracao, nao
         // contrato invalido — e vale dizer isso em vez de um FAIL mudo.
@@ -129,6 +116,30 @@ pub fn verify(run: &mut Run) -> Outcome {
             run.note(format!("  reprovado — {f}"));
         }
         Outcome::Fail(veredito.failures.join("; "))
+    }
+}
+
+/// O relatorio que uma pessoa consegue abrir. Roda depois do veredito: o
+/// exportador tambem valida, e um contrato reprovado nao chega ate aqui.
+fn relatorio_legivel(run: &mut Run) -> Outcome {
+    let destino = format!("evidence/{}/f1-relatorio.html", run.tracer.run_id());
+    match run.datacontract(
+        "verify-relatorio",
+        &["export", "html", CONTRATO, "--output", &destino],
+    ) {
+        Ok(o) if o.ok() => {
+            run.note(format!("relatorio {destino}"));
+            Outcome::Pass
+        }
+        // Lint aprovou e o exportador recusou: os dois validam o mesmo
+        // contrato, entao discordancia aqui e defeito de ferramenta, nao
+        // contrato invalido. Vale FAIL — a evidencia prometida nao existe.
+        Ok(o) => Outcome::Fail(format!(
+            "lint aprovou mas `export html` saiu com {} ({})",
+            o.exit_code,
+            detalhe(&o)
+        )),
+        Err(e) => Outcome::Fail(format!("{e}")),
     }
 }
 
@@ -185,8 +196,13 @@ struct CheckLint {
     reason: Option<String>,
 }
 
-fn primeira_linha(s: &str) -> String {
-    s.lines()
+/// Primeira linha util da saida. Procura em `stderr` e depois em `stdout`
+/// porque o CLI imprime o erro na tabela de stdout — so olhar stderr devolveria
+/// "sem detalhe" justamente quando o detalhe importa.
+fn detalhe(o: &ToolOutcome) -> String {
+    [o.stderr.as_str(), o.stdout.as_str()]
+        .iter()
+        .flat_map(|s| s.lines())
         .map(str::trim)
         .find(|l| !l.is_empty())
         .unwrap_or("sem detalhe")

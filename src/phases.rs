@@ -257,8 +257,31 @@ fn handoff(run: &mut Run) -> Outcome {
         ));
     }
 
+    // A feature vira `done` **antes** do commit, e o estado vai para o disco
+    // aqui — excecao consciente a regra de que so o laco persiste, e a unica
+    // no arquivo. Sem ela o commit carregaria a lista ainda em `in_progress`,
+    // e o historico do Git jamais mostraria uma feature concluida: o artefato
+    // que deveria ser a evidencia registraria todo run como interrompido.
+    //
+    // Marcar antes e seguro porque um FAIL daqui para frente e capturado pelo
+    // laco, que sobrescreve o status para `failed` e persiste.
+    if let Err(e) = run.features.set_status(&id, FeatureStatus::Done) {
+        return Outcome::Fail(format!("{e}"));
+    }
+    if let Err(e) = run.features.save(&run.cfg.feature_list_path()) {
+        return Outcome::Fail(format!("persistindo feature-list antes do commit: {e}"));
+    }
+    if let Err(e) = run.progress.save(&run.cfg.progress_path()) {
+        return Outcome::Fail(format!("persistindo progress antes do commit: {e}"));
+    }
+
     // Escopo explicito: o handoff commita os artefatos do harness, nao a
     // arvore inteira. Nada de varrer trabalho nao relacionado para dentro.
+    //
+    // O que o commit nao alcanca: a evidencia das proprias chamadas de git
+    // abaixo e as ultimas linhas do trace, que so existem depois dele. Um
+    // commit nao contem o registro da sua propria criacao — essas linhas
+    // entram no run seguinte.
     match run.tool("handoff-add", "git", &["add", "state", "trace", "evidence"]) {
         Ok(o) if o.ok() => {}
         Ok(o) => return Outcome::Fail(format!("git add saiu com {}", o.exit_code)),
@@ -309,9 +332,6 @@ fn handoff(run: &mut Run) -> Outcome {
         }
     }
 
-    if let Err(e) = run.features.set_status(&id, FeatureStatus::Done) {
-        return Outcome::Fail(format!("{e}"));
-    }
     Outcome::Pass
 }
 
