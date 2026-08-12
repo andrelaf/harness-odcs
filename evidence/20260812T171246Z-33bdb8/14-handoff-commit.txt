@@ -1,0 +1,26 @@
+# comando: git commit -m harness: handoff f2-mapear -m run_id: 20260812T171246Z-33bdb8
+passos: 7/12
+fases: start..handoff
+artefatos: state/, trace/, evidence/
+# --- stdout ---
+[feat/f2-mapear f087fa1] harness: handoff f2-mapear
+ 19 files changed, 316 insertions(+), 8 deletions(-)
+ create mode 100644 evidence/20260812T171246Z-33bdb8/01-bearings-branch.txt
+ create mode 100644 evidence/20260812T171246Z-33bdb8/02-bearings-head.txt
+ create mode 100644 evidence/20260812T171246Z-33bdb8/03-smoke-engine.txt
+ create mode 100644 evidence/20260812T171246Z-33bdb8/04-smoke-imagem.txt
+ create mode 100644 evidence/20260812T171246Z-33bdb8/05-smoke-git.txt
+ create mode 100644 evidence/20260812T171246Z-33bdb8/06-pick-branch.txt
+ create mode 100644 evidence/20260812T171246Z-33bdb8/07-pick-branch-existe.txt
+ create mode 100644 evidence/20260812T171246Z-33bdb8/08-pick-checkout.txt
+ create mode 100644 evidence/20260812T171246Z-33bdb8/09-implement-campos.txt
+ create mode 100644 evidence/20260812T171246Z-33bdb8/10-verify-campos.txt
+ create mode 100644 evidence/20260812T171246Z-33bdb8/11-handoff-branch.txt
+ create mode 100644 evidence/20260812T171246Z-33bdb8/f2-campos-implement.json
+ create mode 100644 evidence/20260812T171246Z-33bdb8/f2-campos-verify.json
+ create mode 100644 evidence/20260812T171246Z-33bdb8/f2-cobertura.json
+ create mode 100644 evidence/20260812T171246Z-33bdb8/f2-mapeamento.json
+ create mode 100644 evidence/20260812T171246Z-33bdb8/f2-mapeamento.md
+ create mode 100644 trace/20260812T171246Z-33bdb8.jsonl
+
+# --- stderr ---

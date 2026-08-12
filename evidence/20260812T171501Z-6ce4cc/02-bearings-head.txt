@@ -1,0 +1,5 @@
+# comando: git log -1 --format=%h %s
+# --- stdout ---
+34cd620 feat: F2 real (mapeamento campo->glossario) e glossary/
+
+# --- stderr ---
