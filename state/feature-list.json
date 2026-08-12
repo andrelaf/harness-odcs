@@ -1,0 +1,29 @@
+{
+  "schema_version": 1,
+  "features": [
+    {
+      "id": "f1-validar",
+      "order": 1,
+      "title": "Validar contrato contra o schema ODCS",
+      "status": "in_progress"
+    },
+    {
+      "id": "f2-mapear",
+      "order": 2,
+      "title": "Mapear campos ao glossario canonico",
+      "status": "pending"
+    },
+    {
+      "id": "f3-classificar",
+      "order": 3,
+      "title": "Classificar PII/LGPD por campo",
+      "status": "pending"
+    },
+    {
+      "id": "f4-gate",
+      "order": 4,
+      "title": "Gate humano + relatorio de lacunas",
+      "status": "pending"
+    }
+  ]
+}

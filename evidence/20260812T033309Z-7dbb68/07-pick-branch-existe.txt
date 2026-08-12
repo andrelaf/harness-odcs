@@ -1,0 +1,4 @@
+# comando: git rev-parse --verify --quiet feat/f1-validar
+# --- stdout ---
+
+# --- stderr ---

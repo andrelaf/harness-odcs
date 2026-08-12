@@ -1,0 +1,5 @@
+# comando: git rev-parse --abbrev-ref HEAD
+# --- stdout ---
+main
+
+# --- stderr ---
