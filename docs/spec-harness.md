@@ -1,6 +1,6 @@
 # Spec do Harness — contrato congelado
 
-> **Versão da spec:** 1
+> **Versão da spec:** 2 — ver [Mudanças](#12-mudanças)
 > **Status:** congelada. Mudança aqui é decisão explícita, não efeito colateral de implementação.
 > **Escopo:** o harness. Nada do classificador. A spec de cada feature de domínio (F1–F4) é escrita na sessão da própria feature.
 
@@ -39,6 +39,17 @@ Corolário: existe **um único** ponto de entrada, `run.sh`. Não há `run.ps1`,
 | `handoff` | Re-executa apenas a fase `handoff` da feature corrente. | sim |
 | `doctor` | Executa as checagens de ambiente e reporta PASS/FAIL por item. | não |
 | `approve <feature>` | Libera uma feature em `Blocked` para prosseguir no próximo `next`. | sim |
+| `reset <feature>` | Devolve uma feature `Done` ou `Failed` para `Pending`, para reexecução. | sim |
+
+Sobre `reset`: uma feature concluída não tem como ser reexecutada sem editar
+`state/feature-list.json` na mão — e editar estado na mão é exatamente o que o
+harness existe para eliminar. O comando fecha esse buraco.
+
+Ele **não** apaga trace nem evidência. O histórico de execuções anteriores é
+imutável: reexecutar produz um novo `run_id`, e a comparação entre os dois é
+justamente o que se quer poder auditar. `reset` também **não** libera feature
+em `Blocked` — isso é atribuição de `approve`, e confundir os dois abriria um
+caminho para contornar o gate humano sem aprovação.
 
 ### Flags globais
 
@@ -178,7 +189,11 @@ A ordem é explícita no campo `order`. Nunca inferida de posição no array nem
 }
 ```
 
-`run_status` ∈ `running` | `blocked_on_human` | `failed` | `done`.
+`run_status` ∈ `idle` | `running` | `blocked_on_human` | `failed` | `done`.
+
+`idle` é o estado antes do primeiro run e depois de um `approve`. Sem ele, um
+`progress.json` recém-criado teria de mentir sobre estar em algum dos outros
+quatro.
 
 `max_steps` mora **no arquivo**, não em constante compilada nem em variável de ambiente. A Semana 3 precisa provar o abort por teto; o teto tem que ser inspecionável e ajustável sem recompilar.
 
@@ -285,3 +300,33 @@ As checagens de `doctor` e da fase `smoke` são **o mesmo código**, chamado de 
 Não pertencem aqui e não devem ser adicionados: glossário canônico, regras de detecção de PII, formato do relatório de lacunas, schema ODCS, qualquer decisão sobre o classificador. Isso é domínio, vive nas features, e cada uma traz sua própria spec curta na sua sessão.
 
 Ideias novas de qualquer natureza vão para `BACKLOG-FUTURO.md` — não entram no projeto.
+
+---
+
+## 12. Mudanças
+
+Registro das decisões que alteraram este contrato depois de congelado.
+
+### Versão 2 — 12/08/2026
+
+**Adicionado `reset <feature>`** (seção 2). Implementação prevista para a sessão
+de F1.
+
+Motivo: ao concluir F1 com `verify` ainda em no-op, a feature ficou `Done`. Para
+reexecutá-la com a validação real, a única saída era editar
+`state/feature-list.json` na mão — contradizendo o princípio de que o estado é
+manipulado pelo ponto de entrada, nunca por edição direta. A lacuna apareceu no
+uso, não no desenho.
+
+Escopo deliberadamente estreito: só transita `Done`/`Failed` → `Pending`. Não
+toca em trace nem evidência, e não substitui `approve`.
+
+**Corrigido `run_status`** (seção 5): a lista omitia `idle`, que a implementação
+já usa como estado inicial. Divergência entre spec e código, não mudança de
+comportamento.
+
+### Versão 1 — 12/08/2026
+
+Contrato inicial: comandos, exit codes, as 9 fases, tabela de decisão, schemas
+de estado e trace, invariantes, fronteira com ferramentas externas e regras de
+Git.
