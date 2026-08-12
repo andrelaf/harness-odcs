@@ -1,0 +1,33 @@
+# comando: git commit -m harness: handoff f2-mapear -m run_id: 20260812T171501Z-6ce4cc
+passos: 7/12
+fases: start..handoff
+artefatos: state/, trace/, evidence/
+# --- stdout ---
+[feat/f2-mapear 7903dd3] harness: handoff f2-mapear
+ 26 files changed, 520 insertions(+), 3 deletions(-)
+ create mode 100644 evidence/20260812T171246Z-33bdb8/12-handoff-add.txt
+ create mode 100644 evidence/20260812T171246Z-33bdb8/13-handoff-staged.txt
+ create mode 100644 evidence/20260812T171246Z-33bdb8/14-handoff-commit.txt
+ create mode 100644 evidence/20260812T171246Z-33bdb8/15-handoff-hash.txt
+ create mode 100644 evidence/20260812T171436Z-ba2020/01-verify-campos.txt
+ create mode 100644 evidence/20260812T171436Z-ba2020/f2-campos-verify.json
+ create mode 100644 evidence/20260812T171436Z-ba2020/f2-cobertura.json
+ create mode 100644 evidence/20260812T171436Z-ba2020/f2-mapeamento.md
+ create mode 100644 evidence/20260812T171501Z-6ce4cc/01-bearings-branch.txt
+ create mode 100644 evidence/20260812T171501Z-6ce4cc/02-bearings-head.txt
+ create mode 100644 evidence/20260812T171501Z-6ce4cc/03-smoke-engine.txt
+ create mode 100644 evidence/20260812T171501Z-6ce4cc/04-smoke-imagem.txt
+ create mode 100644 evidence/20260812T171501Z-6ce4cc/05-smoke-git.txt
+ create mode 100644 evidence/20260812T171501Z-6ce4cc/06-pick-branch.txt
+ create mode 100644 evidence/20260812T171501Z-6ce4cc/07-implement-campos.txt
+ create mode 100644 evidence/20260812T171501Z-6ce4cc/08-verify-campos.txt
+ create mode 100644 evidence/20260812T171501Z-6ce4cc/09-handoff-branch.txt
+ create mode 100644 evidence/20260812T171501Z-6ce4cc/f2-campos-implement.json
+ create mode 100644 evidence/20260812T171501Z-6ce4cc/f2-campos-verify.json
+ create mode 100644 evidence/20260812T171501Z-6ce4cc/f2-cobertura.json
+ create mode 100644 evidence/20260812T171501Z-6ce4cc/f2-mapeamento.json
+ create mode 100644 evidence/20260812T171501Z-6ce4cc/f2-mapeamento.md
+ create mode 100644 trace/20260812T171436Z-ba2020.jsonl
+ create mode 100644 trace/20260812T171501Z-6ce4cc.jsonl
+
+# --- stderr ---

@@ -1,0 +1,30 @@
+# comando: git diff --cached --name-only
+# --- stdout ---
+evidence/20260812T171246Z-33bdb8/12-handoff-add.txt
+evidence/20260812T171246Z-33bdb8/13-handoff-staged.txt
+evidence/20260812T171246Z-33bdb8/14-handoff-commit.txt
+evidence/20260812T171246Z-33bdb8/15-handoff-hash.txt
+evidence/20260812T171436Z-ba2020/01-verify-campos.txt
+evidence/20260812T171436Z-ba2020/f2-campos-verify.json
+evidence/20260812T171436Z-ba2020/f2-cobertura.json
+evidence/20260812T171436Z-ba2020/f2-mapeamento.md
+evidence/20260812T171501Z-6ce4cc/01-bearings-branch.txt
+evidence/20260812T171501Z-6ce4cc/02-bearings-head.txt
+evidence/20260812T171501Z-6ce4cc/03-smoke-engine.txt
+evidence/20260812T171501Z-6ce4cc/04-smoke-imagem.txt
+evidence/20260812T171501Z-6ce4cc/05-smoke-git.txt
+evidence/20260812T171501Z-6ce4cc/06-pick-branch.txt
+evidence/20260812T171501Z-6ce4cc/07-implement-campos.txt
+evidence/20260812T171501Z-6ce4cc/08-verify-campos.txt
+evidence/20260812T171501Z-6ce4cc/09-handoff-branch.txt
+evidence/20260812T171501Z-6ce4cc/f2-campos-implement.json
+evidence/20260812T171501Z-6ce4cc/f2-campos-verify.json
+evidence/20260812T171501Z-6ce4cc/f2-cobertura.json
+evidence/20260812T171501Z-6ce4cc/f2-mapeamento.json
+evidence/20260812T171501Z-6ce4cc/f2-mapeamento.md
+state/progress.json
+trace/20260812T171246Z-33bdb8.jsonl
+trace/20260812T171436Z-ba2020.jsonl
+trace/20260812T171501Z-6ce4cc.jsonl
+
+# --- stderr ---
