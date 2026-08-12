@@ -1,0 +1,5 @@
+# comando: git log -1 --format=%h %s
+# --- stdout ---
+9569890 feat: F1 gera o relatorio em `verify`, nao em `implement`
+
+# --- stderr ---

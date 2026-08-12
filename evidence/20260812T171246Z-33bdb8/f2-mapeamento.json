@@ -1,0 +1,86 @@
+{
+  "contrato": "contracts/clientes/contract.odcs.yaml",
+  "contrato_sha256": "19121d7f9d6672a770ddcb8050d596c2af1e64a54e747d06a3b73c09b74b4db1",
+  "glossario": "glossary/glossario.yaml",
+  "glossario_versao": "1.0.0",
+  "glossario_sha256": "d4f3c8d60452aaaabc6fe7c0cf01a9255c61e8aa56f73d0919e2dcf146a6c355",
+  "resumo": {
+    "campos": 9,
+    "mapeados": 7,
+    "lacunas": 2
+  },
+  "campos": [
+    {
+      "campo": "cep",
+      "tipo": "string|null",
+      "decisao": "mapeado",
+      "termo": "endereco.cep",
+      "regra": "chave_exata",
+      "justificativa": "`cep` normalizado e `cep`, que o termo `endereco.cep` declara"
+    },
+    {
+      "campo": "cpf",
+      "tipo": "string",
+      "decisao": "mapeado",
+      "termo": "pessoa.cpf",
+      "regra": "chave_exata",
+      "justificativa": "`cpf` normalizado e `cpf`, que o termo `pessoa.cpf` declara"
+    },
+    {
+      "campo": "data_cadastro",
+      "tipo": "string|null",
+      "decisao": "mapeado",
+      "termo": "cadastro.data_criacao",
+      "regra": "chave_exata",
+      "justificativa": "`data_cadastro` normalizado e `data_cadastro`, que o termo `cadastro.data_criacao` declara"
+    },
+    {
+      "campo": "data_nascimento",
+      "tipo": "string|null",
+      "decisao": "mapeado",
+      "termo": "pessoa.data_nascimento",
+      "regra": "chave_exata",
+      "justificativa": "`data_nascimento` normalizado e `data_nascimento`, que o termo `pessoa.data_nascimento` declara"
+    },
+    {
+      "campo": "email",
+      "tipo": "string",
+      "decisao": "mapeado",
+      "termo": "contato.email",
+      "regra": "chave_exata",
+      "justificativa": "`email` normalizado e `email`, que o termo `contato.email` declara"
+    },
+    {
+      "campo": "id_cliente",
+      "tipo": "string",
+      "decisao": "mapeado",
+      "termo": "pessoa.identificador_interno",
+      "regra": "chave_exata",
+      "justificativa": "`id_cliente` normalizado e `id_cliente`, que o termo `pessoa.identificador_interno` declara"
+    },
+    {
+      "campo": "nome_completo",
+      "tipo": "string",
+      "decisao": "mapeado",
+      "termo": "pessoa.nome_completo",
+      "regra": "chave_exata",
+      "justificativa": "`nome_completo` normalizado e `nome_completo`, que o termo `pessoa.nome_completo` declara"
+    },
+    {
+      "campo": "segmento",
+      "tipo": "string|null",
+      "decisao": "sem_correspondencia",
+      "termo": null,
+      "regra": "sem_chave",
+      "justificativa": "nenhum termo do glossario declara a chave `segmento` — lacuna para decisao humana"
+    },
+    {
+      "campo": "valor_total_compras",
+      "tipo": "number|null",
+      "decisao": "sem_correspondencia",
+      "termo": null,
+      "regra": "sem_chave",
+      "justificativa": "nenhum termo do glossario declara a chave `valor_total_compras` — lacuna para decisao humana"
+    }
+  ]
+}

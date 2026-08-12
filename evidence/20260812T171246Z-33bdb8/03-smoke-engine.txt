@@ -1,0 +1,5 @@
+# comando: docker info --format {{.ServerVersion}}
+# --- stdout ---
+29.7.2
+
+# --- stderr ---
