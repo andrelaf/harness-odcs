@@ -3,5 +3,10 @@
 # Temporarios da escrita atomica de estado (tmp + rename).
 *.tmp
 
+# contracts/ guarda fonte, nunca artefato gerado: relatorio de validacao vive
+# em evidence/<run_id>/. Rede de seguranca para um `--output` distraido — a
+# regra esta em contracts/README.md, isto so impede que o engano vire commit.
+/contracts/**/*.html
+
 **/*.rs.bk
 *.pdb

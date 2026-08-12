@@ -1,7 +1,7 @@
 #!/usr/bin/env sh
 # Wrapper do datacontract-cli em container, com o mount padrao.
 #
-# Uso: ./scripts/datacontract.sh lint contracts/clientes.odcs.yaml
+# Uso: ./scripts/datacontract.sh lint contracts/clientes/contract.odcs.yaml
 #
 # Existe para que a versao da imagem e o formato do mount fiquem num lugar so.
 # O caminho do host vai em formato nativo (HARNESS_ROOT_NATIVE) porque o Git

@@ -45,7 +45,7 @@ Do modelador ao contrato classificado com evidência:
 flowchart TD
     DEV["Dev / Data Owner"]
     ED["Editor ODCS<br/>datacontract edit<br/>Docker local ou servidor"]
-    YML["contracts/clientes.odcs.yaml"]
+    YML["contracts/clientes/contract.odcs.yaml"]
 
     DEV -->|modela o dataset| ED
     ED -->|salva direto no arquivo| YML
@@ -126,7 +126,7 @@ docker run --rm \
   -p 4243:4243 \
   -v "$PWD:/home/datacontract" \
   datacontract/cli:1.1.0 \
-  edit contracts/clientes.odcs.yaml --host 0.0.0.0 --no-open
+  edit contracts/clientes/contract.odcs.yaml --host 0.0.0.0 --no-open
 ```
 
 Acesse **http://localhost:4243**.
@@ -141,7 +141,7 @@ A porta default é **4243**. Os assets do editor vêm empacotados no CLI e **fun
 
 No projeto isso fica encapsulado em `./scripts/editor.sh <contrato>`.
 
-Sem container, com o CLI instalado na máquina: `datacontract edit contracts/clientes.odcs.yaml`.
+Sem container, com o CLI instalado na máquina: `datacontract edit contracts/clientes/contract.odcs.yaml`.
 
 ### Modo 2 · Editor compartilhado da organização — **recomendado para uso corporativo**
 
@@ -227,7 +227,7 @@ run.sh                    ponto de entrada único
 scripts/                  despachantes de ambiente (bootstrap, doctor, editor, ci)
 src/                      o harness em Rust — fluxo, estado, trace, fases
 tests/                    tabela de transições: ordem, teto, halt
-contracts/                contratos ODCS sintéticos
+contracts/<nome>/         um diretório por contrato — só fonte, nada gerado
 state/                    feature-list.json, progress.json
 trace/                    <run_id>.jsonl, append-only
 evidence/                 saída bruta das ferramentas, por run

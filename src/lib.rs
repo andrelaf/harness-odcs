@@ -7,6 +7,7 @@
 pub mod checks;
 pub mod config;
 pub mod exit;
+pub mod features;
 pub mod flow;
 pub mod phases;
 pub mod state;

@@ -6,6 +6,7 @@
 
 use crate::checks;
 use crate::config::Config;
+use crate::features;
 use crate::flow::{Outcome, Phase};
 use crate::state::{FeatureList, FeatureStatus, Progress};
 use crate::tools::{self, ToolOutcome};
@@ -62,7 +63,20 @@ impl Run {
         Ok(out)
     }
 
-    fn note(&mut self, s: impl Into<String>) {
+    /// Invocacao do `datacontract-cli` no container fixado.
+    ///
+    /// Passa pelo mesmo `tool`, entao cai no trace com comando, exit code e
+    /// duracao como qualquer outro processo — inclusive a tag da imagem, que e
+    /// o que torna o run reproduzivel meses depois.
+    pub fn datacontract(&mut self, label: &str, args: &[&str]) -> Result<ToolOutcome> {
+        let image = self.cfg.dc_image.clone();
+        let root = self.cfg.root.display().to_string();
+        let montado = tools::datacontract_args(&image, &root, args);
+        let refs: Vec<&str> = montado.iter().map(String::as_str).collect();
+        self.tool(label, "docker", &refs)
+    }
+
+    pub fn note(&mut self, s: impl Into<String>) {
         self.notes.push(s.into());
     }
 }
@@ -75,8 +89,8 @@ pub fn execute(phase: Phase, run: &mut Run) -> Outcome {
         Phase::Bearings => bearings(run),
         Phase::Smoke => smoke(run),
         Phase::Pick => pick(run),
-        Phase::Implement => hook_or_noop(run, Phase::Implement),
-        Phase::Verify => hook_or_noop(run, Phase::Verify),
+        Phase::Implement => dominio_ou_noop(run, Phase::Implement),
+        Phase::Verify => dominio_ou_noop(run, Phase::Verify),
         Phase::Handoff => handoff(run),
         Phase::Stop => stop(run),
     }
@@ -201,36 +215,26 @@ fn pick(run: &mut Run) -> Outcome {
     Outcome::Pass
 }
 
-/// Resolucao de hook: `features/<id>/<fase>.sh` quando existir, no-op quando
-/// nao. E o que permite adicionar F1 sem tocar no nucleo do fluxo.
-fn hook_or_noop(run: &mut Run, phase: Phase) -> Outcome {
-    let hook = run
-        .cfg
-        .root
-        .join("features")
-        .join(&run.feature_id)
-        .join(format!("{}.sh", phase.as_str()));
-
-    if !hook.exists() {
-        run.note(format!(
-            "sem hook de feature para `{phase}` — esqueleto, no-op"
-        ));
-        return Outcome::Pass;
+/// As duas fases de dominio, resolvidas na ordem da spec (secao 3):
+/// implementacao da feature -> implementacao generica -> no-op `Pass`.
+///
+/// O nivel do meio esta vazio de proposito: nao ha nada que `implement` ou
+/// `verify` facam igual para todas as features. Ele fica declarado na ordem
+/// para que a proxima feature que precisar dele saiba onde entra.
+///
+/// O no-op no fim nao e enfeite: e ele que permite F2 a F4 atravessarem o
+/// fluxo antes de existirem. O que ele nao pode fazer e passar despercebido —
+/// dai a nota explicita, que foi justamente o que denunciou F1 concluida sem
+/// validar nada.
+fn dominio_ou_noop(run: &mut Run, phase: Phase) -> Outcome {
+    if let Some(outcome) = features::dispatch(run, phase) {
+        return outcome;
     }
-
-    let path = hook.display().to_string();
-    match run.tool(&format!("{phase}-hook"), "sh", &[&path]) {
-        Ok(o) if o.ok() => {
-            run.note(format!("hook {} PASS", path));
-            Outcome::Pass
-        }
-        Ok(o) => Outcome::Fail(format!(
-            "hook `{path}` saiu com {} ({})",
-            o.exit_code,
-            o.stderr.lines().next().unwrap_or("").trim()
-        )),
-        Err(e) => Outcome::Fail(format!("{e}")),
-    }
+    run.note(format!(
+        "sem implementacao de dominio para `{phase}` em `{}` — no-op",
+        run.feature_id
+    ));
+    Outcome::Pass
 }
 
 fn handoff(run: &mut Run) -> Outcome {

@@ -18,7 +18,7 @@ export HARNESS_ROOT
 . "$HARNESS_ROOT/scripts/env.sh"
 
 modo="${1:-pessoal}"
-contrato="${2:-contracts/clientes.odcs.yaml}"
+contrato="${2:-contracts/clientes/contract.odcs.yaml}"
 
 case "$modo" in
     pessoal)

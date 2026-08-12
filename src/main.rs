@@ -51,6 +51,8 @@ enum Cmd {
     Doctor,
     /// Libera uma feature bloqueada para prosseguir.
     Approve { feature: String },
+    /// Devolve uma feature concluida ou falhada para `pending`.
+    Reset { feature: String },
 }
 
 fn main() {
@@ -72,6 +74,7 @@ fn main() {
         Cmd::Handoff => cmd_single(&cfg, Phase::Handoff),
         Cmd::Doctor => cmd_doctor(&cfg),
         Cmd::Approve { feature } => cmd_approve(&cfg, feature),
+        Cmd::Reset { feature } => cmd_reset(&cfg, feature),
     };
 
     match result {
@@ -208,6 +211,63 @@ fn cmd_approve(cfg: &Config, feature_id: &str) -> Result<i32> {
     progress.save(&pr_path)?;
 
     println!("feature `{feature_id}` liberada — rode ./run.sh next");
+    Ok(Exit::Pass.code())
+}
+
+/// Devolve uma feature `Done` ou `Failed` para `Pending`, para reexecucao.
+///
+/// Existe porque sem ele a unica forma de reexecutar uma feature concluida
+/// seria editar `state/feature-list.json` na mao — exatamente o que o harness
+/// existe para eliminar.
+///
+/// Nao apaga trace nem evidencia: o historico e imutavel, reexecutar produz um
+/// novo `run_id`, e comparar os dois e o que se quer poder auditar. Tambem nao
+/// libera feature `Blocked` — isso e atribuicao de `approve`, e confundir os
+/// dois abriria caminho para contornar o gate humano sem aprovacao.
+fn cmd_reset(cfg: &Config, feature_id: &str) -> Result<i32> {
+    let fl_path = cfg.feature_list_path();
+    let pr_path = cfg.progress_path();
+    let mut features = FeatureList::load_or_seed(&fl_path)?;
+    let mut progress = Progress::load_or_default(&pr_path)?;
+
+    let previous = match features.get(feature_id) {
+        None => {
+            eprintln!("feature `{feature_id}` nao existe");
+            return Ok(Exit::Usage.code());
+        }
+        Some(f) if f.status == FeatureStatus::Blocked => {
+            eprintln!(
+                "feature `{feature_id}` esta bloqueada aguardando decisao humana — libere com ./run.sh approve {feature_id}"
+            );
+            return Ok(Exit::Usage.code());
+        }
+        Some(f) if f.status != FeatureStatus::Done && f.status != FeatureStatus::Failed => {
+            eprintln!(
+                "feature `{feature_id}` esta em `{}` — reset so se aplica a `done` ou `failed`",
+                f.status.as_str()
+            );
+            return Ok(Exit::Usage.code());
+        }
+        Some(f) => f.status,
+    };
+
+    features.set_status(feature_id, FeatureStatus::Pending)?;
+
+    // O cursor so e mexido quando aponta para a feature reaberta. Zerar o
+    // progresso de outra feature seria efeito colateral que ninguem pediu.
+    if progress.current_feature.as_deref() == Some(feature_id) {
+        progress.run_status = RunStatus::Idle;
+        progress.current_phase = None;
+    }
+
+    features.save(&fl_path)?;
+    progress.save(&pr_path)?;
+
+    println!(
+        "feature `{feature_id}`: {} -> pending — rode ./run.sh next",
+        previous.as_str()
+    );
+    println!("trace e evidencia dos runs anteriores foram preservados");
     Ok(Exit::Pass.code())
 }
 
