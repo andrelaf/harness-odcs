@@ -1,0 +1,21 @@
+# comando: git commit -m harness: handoff f1-validar -m run_id: 20260812T041646Z-b310dc
+passos: 7/12
+fases: start..handoff
+artefatos: state/, trace/, evidence/
+# --- stdout ---
+[feat/f1-validar 3fb470b] harness: handoff f1-validar
+ 14 files changed, 3485 insertions(+), 9 deletions(-)
+ create mode 100644 evidence/20260812T041646Z-b310dc/01-bearings-branch.txt
+ create mode 100644 evidence/20260812T041646Z-b310dc/02-bearings-head.txt
+ create mode 100644 evidence/20260812T041646Z-b310dc/03-smoke-engine.txt
+ create mode 100644 evidence/20260812T041646Z-b310dc/04-smoke-imagem.txt
+ create mode 100644 evidence/20260812T041646Z-b310dc/05-smoke-git.txt
+ create mode 100644 evidence/20260812T041646Z-b310dc/06-pick-branch.txt
+ create mode 100644 evidence/20260812T041646Z-b310dc/07-implement-relatorio.txt
+ create mode 100644 evidence/20260812T041646Z-b310dc/08-verify-lint.txt
+ create mode 100644 evidence/20260812T041646Z-b310dc/09-handoff-branch.txt
+ create mode 100644 evidence/20260812T041646Z-b310dc/f1-lint.json
+ create mode 100644 evidence/20260812T041646Z-b310dc/f1-relatorio.html
+ create mode 100644 trace/20260812T041646Z-b310dc.jsonl
+
+# --- stderr ---

@@ -1,12 +1,12 @@
 {
   "schema_version": 1,
-  "run_id": "20260812T041646Z-b310dc",
+  "run_id": "20260812T042006Z-363194",
   "current_feature": "f1-validar",
   "current_phase": "handoff",
   "step_count": 7,
   "max_steps": 12,
   "run_status": "running",
   "last_result": "PASS",
-  "last_transition_at": "2026-08-12T04:16:50.4201377Z",
-  "attempts": 3
+  "last_transition_at": "2026-08-12T04:20:10.2230892Z",
+  "attempts": 5
 }

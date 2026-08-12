@@ -1,0 +1,45 @@
+{
+  "runId": "8232023d-8b77-4940-a02e-e5b0b1438750",
+  "datacontractCliVersion": "1.1.0",
+  "dataContractId": null,
+  "dataContractVersion": null,
+  "dataProductId": null,
+  "outputPortId": null,
+  "server": null,
+  "filters": null,
+  "timestampStart": "2026-08-12T04:19:56.832315Z",
+  "timestampEnd": "2026-08-12T04:19:56.968999Z",
+  "result": "failed",
+  "checks": [
+    {
+      "id": null,
+      "key": null,
+      "category": null,
+      "type": "lint",
+      "name": "Check that data contract YAML is valid",
+      "model": null,
+      "field": null,
+      "quality_id": null,
+      "tags": null,
+      "engine": "datacontract",
+      "language": null,
+      "implementation": null,
+      "result": "failed",
+      "reason": "data.schema.clientes.properties.data_nascimento.logicalType must be one of ['string', 'date', 'timestamp', 'time', 'number', 'integer', 'object', 'array', 'boolean']",
+      "diagnostics": null,
+      "failed_samples": null
+    }
+  ],
+  "logs": [
+    {
+      "level": "INFO",
+      "message": "Linting data contract",
+      "timestamp": "2026-08-12T04:19:56.832357Z"
+    },
+    {
+      "level": "ERROR",
+      "message": "Run operation failed: [lint] Check that data contract YAML is valid - None - ResultEnum.failed - data.schema.clientes.properties.data_nascimento.logicalType must be one of ['string', 'date', 'timestamp', 'time', 'number', 'integer', 'object', 'array', 'boolean'] - datacontract",
+      "timestamp": "2026-08-12T04:19:56.968984Z"
+    }
+  ]
+}

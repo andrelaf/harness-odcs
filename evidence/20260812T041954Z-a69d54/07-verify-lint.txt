@@ -1,0 +1,20 @@
+# comando: docker run --rm -v C:/repos/harness-odcs:/home/datacontract datacontract/cli:1.1.0 lint contracts/clientes/contract.odcs.yaml --output-format json --output evidence/20260812T041954Z-a69d54/f1-lint.json
+# --- stdout ---
+Written json test results to evidence/20260812T041954Z-a69d54/f1-lint.json
+╭────────┬──────────────────────────────┬───────┬──────────────────────────────╮
+│ Result │ Check                        │ Field │ Details                      │
+├────────┼──────────────────────────────┼───────┼──────────────────────────────┤
+│ failed │ Check that data contract     │       │ data.schema.clientes.proper… │
+│        │ YAML is valid                │       │ must be one of ['string',    │
+│        │                              │       │ 'date', 'timestamp', 'time', │
+│        │                              │       │ 'number', 'integer',         │
+│        │                              │       │ 'object', 'array',           │
+│        │                              │       │ 'boolean']                   │
+╰────────┴──────────────────────────────┴───────┴──────────────────────────────╯
+🔴 data contract is invalid, found the following errors:
+1) Check that data contract YAML is valid: 
+data.schema.clientes.properties.data_nascimento.logicalType must be one of 
+['string', 'date', 'timestamp', 'time', 'number', 'integer', 'object', 'array', 
+'boolean']
+
+# --- stderr ---
