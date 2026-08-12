@@ -13,6 +13,7 @@
 //! PATH para o fluxo decidir a mesma coisa.
 
 pub mod f1_validar;
+pub mod f2_mapear;
 
 use crate::flow::{Outcome, Phase};
 use crate::phases::Run;
@@ -23,6 +24,8 @@ pub fn dispatch(run: &mut Run, phase: Phase) -> Option<Outcome> {
     match (run.feature_id.as_str(), phase) {
         ("f1-validar", Phase::Implement) => Some(f1_validar::implement(run)),
         ("f1-validar", Phase::Verify) => Some(f1_validar::verify(run)),
+        ("f2-mapear", Phase::Implement) => Some(f2_mapear::implement(run)),
+        ("f2-mapear", Phase::Verify) => Some(f2_mapear::verify(run)),
         _ => None,
     }
 }

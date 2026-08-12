@@ -30,3 +30,8 @@ time = { version = "0.3", features = ["formatting", "macros"] }
 # Hash da evidencia. Precisa ser estavel entre versoes, o que exclui o
 # DefaultHasher da std (SipHash sem garantia de estabilidade).
 sha2 = "0.10"
+# Glossario canonico (F2) em YAML. Fork mantido do serde_yaml, que o autor
+# arquivou em 2024 — a alternativa seria carregar o glossario em JSON, o que
+# transferiria o custo para quem edita o arquivo a mao. O harness nao parseia
+# ODCS com isto: quem interpreta contrato e o datacontract-cli.
+serde_norway = "0.9.42"

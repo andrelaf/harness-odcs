@@ -1,0 +1,62 @@
+# Glossario canonico — a fonte de verdade sobre o que cada campo significa.
+#
+# Convencao, regras de casamento e politica de versao: glossary/README.md
+#
+# Conteudo sem acento, por consistencia com contracts/: o casamento e feito
+# sobre o nome normalizado do campo, e variacao de grafia se resolve
+# declarando o alias, nunca adivinhando.
+
+version: 1.0.0
+
+termos:
+  - id: pessoa.identificador_interno
+    nome: Identificador interno de pessoa
+    definicao: >-
+      Chave pseudonimizada que identifica uma pessoa natural dentro dos
+      sistemas da organizacao, sem carregar significado fora deles.
+    aliases: [id_cliente, cliente_id, id_pessoa]
+
+  - id: pessoa.nome_completo
+    nome: Nome completo
+    definicao: >-
+      Nome civil completo de uma pessoa natural, como consta em documento
+      oficial de identificacao.
+    aliases: [nome_completo, nome_civil]
+
+  - id: pessoa.cpf
+    nome: CPF
+    definicao: >-
+      Numero de inscricao no Cadastro de Pessoas Fisicas da Receita Federal,
+      11 digitos.
+    aliases: [cpf, num_cpf, nr_cpf, documento_cpf]
+
+  - id: pessoa.data_nascimento
+    nome: Data de nascimento
+    definicao: Data em que a pessoa natural nasceu.
+    aliases: [data_nascimento, dt_nascimento, nascimento]
+
+  - id: contato.email
+    nome: Endereco de e-mail
+    definicao: >-
+      Endereco de correio eletronico usado para contato com a pessoa.
+    aliases: [email, e_mail, endereco_email]
+
+  # Sem campo correspondente no contrato de clientes. Esta aqui de proposito:
+  # o glossario e da organizacao, nao de um contrato. Termo nao usado nao e
+  # defeito — campo sem termo e que vira lacuna.
+  - id: contato.telefone
+    nome: Telefone de contato
+    definicao: Numero de telefone usado para contato com a pessoa.
+    aliases: [telefone, fone, celular, telefone_contato]
+
+  - id: endereco.cep
+    nome: CEP
+    definicao: Codigo de Enderecamento Postal brasileiro, 8 digitos.
+    aliases: [cep, codigo_postal]
+
+  - id: cadastro.data_criacao
+    nome: Data de criacao do cadastro
+    definicao: >-
+      Data em que o registro passou a existir na base da organizacao. Nao
+      descreve a pessoa: descreve o cadastro.
+    aliases: [data_cadastro, dt_cadastro, criado_em]
