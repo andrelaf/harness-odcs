@@ -1,0 +1,5 @@
+# comando: git log -1 --format=%h %s
+# --- stdout ---
+2a87865 harness: handoff f1-validar
+
+# --- stderr ---

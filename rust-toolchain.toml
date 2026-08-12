@@ -1,0 +1,4 @@
+[toolchain]
+# Fixado para que as duas IDEs compilem exatamente o mesmo binario.
+channel = "1.95.0"
+components = ["rustfmt", "clippy"]

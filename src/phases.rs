@@ -1,0 +1,317 @@
+//! Implementacao das fases.
+//!
+//! Cada fase e uma funcao `fn(&mut Run) -> Outcome`. Nenhuma escreve estado
+//! diretamente: quem persiste e o laco em `main.rs`. Isso mantem as fases
+//! substituiveis e o ponto de escrita unico.
+
+use crate::checks;
+use crate::config::Config;
+use crate::flow::{Outcome, Phase};
+use crate::state::{FeatureList, FeatureStatus, Progress};
+use crate::tools::{self, ToolOutcome};
+use crate::trace::{Draft, Tracer};
+use anyhow::Result;
+use std::path::PathBuf;
+
+pub struct Run {
+    pub cfg: Config,
+    pub features: FeatureList,
+    pub progress: Progress,
+    pub tracer: Tracer,
+    pub feature_id: String,
+    pub evidence_dir: PathBuf,
+    pub tool_seq: u32,
+    /// Linhas para o operador, impressas pela fase corrente.
+    pub notes: Vec<String>,
+}
+
+impl Run {
+    /// Unico caminho para executar processo externo dentro de um run.
+    pub fn tool(&mut self, label: &str, program: &str, args: &[&str]) -> Result<ToolOutcome> {
+        self.tool_seq += 1;
+        let labeled = format!("{:02}-{label}", self.tool_seq);
+        let out = tools::run(program, args, &self.evidence_dir, &labeled)?;
+
+        let evidence = out
+            .evidence_path
+            .as_ref()
+            .and_then(|p| p.file_name())
+            .map(|n| n.to_string_lossy().to_string())
+            .unwrap_or_else(|| "-".to_string());
+
+        self.tracer.emit(
+            "tool_exec",
+            Draft {
+                feature: Some(self.feature_id.clone()),
+                result: Some(if out.ok() { "PASS" } else { "FAIL" }.to_string()),
+                duration_ms: Some(out.duration_ms),
+                exit_code: Some(out.exit_code),
+                step: self.progress.step_count,
+                // Referencia + hash. A saida bruta fica em evidence/, nunca
+                // no trace: e o trace que circula.
+                msg: format!(
+                    "{} | evidence={} sha256={}",
+                    out.command_line(),
+                    evidence,
+                    &out.stdout_sha256[..16]
+                ),
+                ..Default::default()
+            },
+        )?;
+
+        Ok(out)
+    }
+
+    fn note(&mut self, s: impl Into<String>) {
+        self.notes.push(s.into());
+    }
+}
+
+pub fn execute(phase: Phase, run: &mut Run) -> Outcome {
+    run.notes.clear();
+    match phase {
+        Phase::Start => start(run),
+        Phase::Plan => plan(run),
+        Phase::Bearings => bearings(run),
+        Phase::Smoke => smoke(run),
+        Phase::Pick => pick(run),
+        Phase::Implement => hook_or_noop(run, Phase::Implement),
+        Phase::Verify => hook_or_noop(run, Phase::Verify),
+        Phase::Handoff => handoff(run),
+        Phase::Stop => stop(run),
+    }
+}
+
+fn start(run: &mut Run) -> Outcome {
+    run.note(format!("run_id {}", run.tracer.run_id()));
+    Outcome::Pass
+}
+
+fn plan(run: &mut Run) -> Outcome {
+    let id = run.feature_id.clone();
+    match run.features.get(&id) {
+        Some(f) => {
+            run.note(format!("feature {} — {}", f.id, f.title));
+            Outcome::Pass
+        }
+        None => Outcome::Fail(format!("feature `{id}` nao esta na lista")),
+    }
+}
+
+fn bearings(run: &mut Run) -> Outcome {
+    let branch = match run.tool(
+        "bearings-branch",
+        "git",
+        &["rev-parse", "--abbrev-ref", "HEAD"],
+    ) {
+        Ok(o) if o.ok() => o.first_line(),
+        Ok(o) => return Outcome::Fail(format!("git rev-parse saiu com {}", o.exit_code)),
+        Err(e) => return Outcome::Fail(format!("{e}")),
+    };
+    let head = match run.tool("bearings-head", "git", &["log", "-1", "--format=%h %s"]) {
+        Ok(o) if o.ok() => o.first_line(),
+        // Repositorio sem commit ainda nao e erro de fluxo.
+        Ok(_) => "sem commits".to_string(),
+        Err(e) => return Outcome::Fail(format!("{e}")),
+    };
+    run.note(format!("branch {branch} | HEAD {head}"));
+    Outcome::Pass
+}
+
+fn smoke(run: &mut Run) -> Outcome {
+    let cfg = run.cfg.clone();
+    let mut exec = |label: &str, program: &str, args: &[&str]| run.tool(label, program, args);
+    let results = checks::environment(&cfg, &mut exec);
+
+    let failed: Vec<&checks::Check> = results.iter().filter(|c| !c.ok).collect();
+    let summary: Vec<String> = results
+        .iter()
+        .map(|c| {
+            format!(
+                "{} {} — {}",
+                if c.ok { "PASS" } else { "FAIL" },
+                c.name,
+                c.detail
+            )
+        })
+        .collect();
+    for line in summary {
+        run.note(line);
+    }
+
+    if failed.is_empty() {
+        Outcome::Pass
+    } else {
+        Outcome::Fail(
+            failed
+                .iter()
+                .map(|c| format!("{}: {}", c.name, c.detail))
+                .collect::<Vec<_>>()
+                .join("; "),
+        )
+    }
+}
+
+fn pick(run: &mut Run) -> Outcome {
+    let id = run.feature_id.clone();
+    if let Err(e) = run.features.set_status(&id, FeatureStatus::InProgress) {
+        return Outcome::Fail(format!("{e}"));
+    }
+
+    // O harness nao escreve na main: cada feature tem a sua branch.
+    let want = format!("feat/{id}");
+    let current = match run.tool("pick-branch", "git", &["rev-parse", "--abbrev-ref", "HEAD"]) {
+        Ok(o) if o.ok() => o.first_line(),
+        Ok(o) => return Outcome::Fail(format!("git rev-parse saiu com {}", o.exit_code)),
+        Err(e) => return Outcome::Fail(format!("{e}")),
+    };
+
+    if current != want {
+        let exists = run
+            .tool(
+                "pick-branch-existe",
+                "git",
+                &["rev-parse", "--verify", "--quiet", &want],
+            )
+            .map(|o| o.ok())
+            .unwrap_or(false);
+        let args: Vec<&str> = if exists {
+            vec!["checkout", &want]
+        } else {
+            vec!["checkout", "-b", &want]
+        };
+        match run.tool("pick-checkout", "git", &args) {
+            Ok(o) if o.ok() => run.note(format!(
+                "branch {want} ({})",
+                if exists { "existente" } else { "criada" }
+            )),
+            Ok(o) => {
+                return Outcome::Fail(format!(
+                    "nao consegui ir para {want}: git checkout saiu com {} ({})",
+                    o.exit_code,
+                    o.stderr.lines().next().unwrap_or("").trim()
+                ));
+            }
+            Err(e) => return Outcome::Fail(format!("{e}")),
+        }
+    } else {
+        run.note(format!("branch {want} (ja ativa)"));
+    }
+
+    Outcome::Pass
+}
+
+/// Resolucao de hook: `features/<id>/<fase>.sh` quando existir, no-op quando
+/// nao. E o que permite adicionar F1 sem tocar no nucleo do fluxo.
+fn hook_or_noop(run: &mut Run, phase: Phase) -> Outcome {
+    let hook = run
+        .cfg
+        .root
+        .join("features")
+        .join(&run.feature_id)
+        .join(format!("{}.sh", phase.as_str()));
+
+    if !hook.exists() {
+        run.note(format!(
+            "sem hook de feature para `{phase}` — esqueleto, no-op"
+        ));
+        return Outcome::Pass;
+    }
+
+    let path = hook.display().to_string();
+    match run.tool(&format!("{phase}-hook"), "sh", &[&path]) {
+        Ok(o) if o.ok() => {
+            run.note(format!("hook {} PASS", path));
+            Outcome::Pass
+        }
+        Ok(o) => Outcome::Fail(format!(
+            "hook `{path}` saiu com {} ({})",
+            o.exit_code,
+            o.stderr.lines().next().unwrap_or("").trim()
+        )),
+        Err(e) => Outcome::Fail(format!("{e}")),
+    }
+}
+
+fn handoff(run: &mut Run) -> Outcome {
+    let id = run.feature_id.clone();
+
+    // Defesa em profundidade: mesmo que `pick` tenha falhado em trocar de
+    // branch, o commit nao acontece na main.
+    let branch = match run.tool(
+        "handoff-branch",
+        "git",
+        &["rev-parse", "--abbrev-ref", "HEAD"],
+    ) {
+        Ok(o) if o.ok() => o.first_line(),
+        Ok(o) => return Outcome::Fail(format!("git rev-parse saiu com {}", o.exit_code)),
+        Err(e) => return Outcome::Fail(format!("{e}")),
+    };
+    if branch == "main" || branch == "master" {
+        return Outcome::Fail(format!(
+            "recusando commit em `{branch}` — o harness nao escreve na branch principal"
+        ));
+    }
+
+    // Escopo explicito: o handoff commita os artefatos do harness, nao a
+    // arvore inteira. Nada de varrer trabalho nao relacionado para dentro.
+    match run.tool("handoff-add", "git", &["add", "state", "trace", "evidence"]) {
+        Ok(o) if o.ok() => {}
+        Ok(o) => return Outcome::Fail(format!("git add saiu com {}", o.exit_code)),
+        Err(e) => return Outcome::Fail(format!("{e}")),
+    }
+
+    let staged = match run.tool(
+        "handoff-staged",
+        "git",
+        &["diff", "--cached", "--name-only"],
+    ) {
+        Ok(o) => o.stdout.trim().to_string(),
+        Err(e) => return Outcome::Fail(format!("{e}")),
+    };
+
+    if staged.is_empty() {
+        run.note("nada novo para commitar".to_string());
+    } else {
+        let subject = format!("harness: handoff {id}");
+        let body = format!(
+            "run_id: {}\npassos: {}/{}\nfases: start..handoff\nartefatos: state/, trace/, evidence/",
+            run.tracer.run_id(),
+            run.progress.step_count,
+            run.progress.max_steps
+        );
+        match run.tool(
+            "handoff-commit",
+            "git",
+            &["commit", "-m", &subject, "-m", &body],
+        ) {
+            Ok(o) if o.ok() => {}
+            Ok(o) => {
+                return Outcome::Fail(format!(
+                    "git commit saiu com {} ({})",
+                    o.exit_code,
+                    o.stdout.lines().next().unwrap_or("").trim()
+                ));
+            }
+            Err(e) => return Outcome::Fail(format!("{e}")),
+        }
+
+        match run.tool("handoff-hash", "git", &["rev-parse", "--short", "HEAD"]) {
+            Ok(o) if o.ok() => {
+                let hash = o.first_line();
+                run.note(format!("commit {hash} em {branch}"));
+            }
+            _ => run.note(format!("commit criado em {branch}")),
+        }
+    }
+
+    if let Err(e) = run.features.set_status(&id, FeatureStatus::Done) {
+        return Outcome::Fail(format!("{e}"));
+    }
+    Outcome::Pass
+}
+
+fn stop(run: &mut Run) -> Outcome {
+    run.note(format!("feature {} concluida", run.feature_id));
+    Outcome::Pass
+}

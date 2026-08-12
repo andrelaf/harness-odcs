@@ -1,0 +1,56 @@
+apiVersion: v3.1.0
+kind: DataContract
+id: clientes-sintetico
+name: Clientes (dataset sintetico)
+version: 1.0.0
+status: draft
+
+description:
+  purpose: Dataset sintetico de clientes para exercitar o harness de classificacao de privacidade.
+  usage: Uso exclusivo em desenvolvimento. Nenhum dado real ou de producao.
+  limitations: Todos os registros sao gerados artificialmente e nao correspondem a pessoas reais.
+
+schema:
+  - name: clientes
+    description: Cadastro de clientes.
+    properties:
+      - name: id_cliente
+        logicalType: string
+        description: Identificador interno pseudonimizado do cliente.
+        required: true
+        unique: true
+
+      - name: nome_completo
+        logicalType: string
+        description: Nome civil completo do cliente.
+        required: true
+
+      - name: cpf
+        logicalType: string
+        description: Cadastro de Pessoa Fisica, 11 digitos, sem formatacao.
+        required: true
+
+      - name: email
+        logicalType: string
+        description: Endereco de e-mail de contato.
+        required: true
+
+      - name: data_nascimento
+        logicalType: date
+        description: Data de nascimento do cliente.
+
+      - name: cep
+        logicalType: string
+        description: Codigo de endereçamento postal de residencia, 8 digitos.
+
+      - name: segmento
+        logicalType: string
+        description: Faixa comercial atribuida pela area de marketing.
+
+      - name: data_cadastro
+        logicalType: date
+        description: Data em que o cadastro foi criado.
+
+      - name: valor_total_compras
+        logicalType: number
+        description: Soma historica das compras do cliente, em reais.

@@ -1,0 +1,19 @@
+# comando: git diff --cached --name-only
+# --- stdout ---
+evidence/20260812T033309Z-7dbb68/01-bearings-branch.txt
+evidence/20260812T033309Z-7dbb68/02-bearings-head.txt
+evidence/20260812T033309Z-7dbb68/03-smoke-engine.txt
+evidence/20260812T033309Z-7dbb68/04-smoke-imagem.txt
+evidence/20260812T033309Z-7dbb68/05-smoke-git.txt
+evidence/20260812T033309Z-7dbb68/06-pick-branch.txt
+evidence/20260812T033309Z-7dbb68/07-pick-branch-existe.txt
+evidence/20260812T033309Z-7dbb68/08-pick-checkout.txt
+evidence/20260812T033309Z-7dbb68/09-handoff-branch.txt
+evidence/doctor/smoke-engine.txt
+evidence/doctor/smoke-git.txt
+evidence/doctor/smoke-imagem.txt
+state/feature-list.json
+state/progress.json
+trace/20260812T033309Z-7dbb68.jsonl
+
+# --- stderr ---

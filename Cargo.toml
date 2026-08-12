@@ -1,0 +1,32 @@
+[package]
+name = "harness-odcs"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.95"
+description = "Harness de desenvolvimento incremental para classificacao de privacidade de contratos ODCS"
+publish = false
+
+# Split lib/bin proposital: sem a lib, `tests/` nao alcanca a maquina de
+# estados e o criterio "determinismo testavel" fica sem prova. A politica
+# vive na lib; o bin so faz CLI e exit code.
+[lib]
+name = "harness"
+path = "src/lib.rs"
+
+[[bin]]
+name = "harness-odcs"
+path = "src/main.rs"
+
+[dependencies]
+# Estado e trace em JSON/JSONL.
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+# CLI e help do ponto de entrada.
+clap = { version = "4", features = ["derive"] }
+# Erros com contexto.
+anyhow = "1"
+# Timestamps ISO-8601 em UTC para o trace.
+time = { version = "0.3", features = ["formatting", "macros"] }
+# Hash da evidencia. Precisa ser estavel entre versoes, o que exclui o
+# DefaultHasher da std (SipHash sem garantia de estabilidade).
+sha2 = "0.10"

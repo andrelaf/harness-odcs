@@ -1,0 +1,24 @@
+# A maquina de desenvolvimento tem core.autocrlf=true. Sem este arquivo, o Git
+# converte os scripts para CRLF ao materializar a working tree e o bash falha
+# com `$'\r': command not found`. O ponto de entrada quebraria no clone — antes
+# mesmo de a segunda IDE entrar em cena. Isto e requisito de portabilidade.
+
+* text=auto eol=lf
+
+# Ponto de entrada e despachantes: LF obrigatorio.
+*.sh    text eol=lf
+
+# Codigo e manifestos.
+*.rs    text eol=lf
+*.toml  text eol=lf
+*.md    text eol=lf
+*.yaml  text eol=lf
+*.yml   text eol=lf
+
+# Artefatos de evidencia: LF fixo mantem o diff do trace e do estado estavel
+# entre maquinas. Evidencia que muda de bytes sem mudar de conteudo nao serve
+# como evidencia.
+*.json  text eol=lf
+*.jsonl text eol=lf
+
+Cargo.lock text eol=lf

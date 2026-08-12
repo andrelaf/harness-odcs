@@ -1,0 +1,24 @@
+# comando: git commit -m harness: handoff f1-validar -m run_id: 20260812T033309Z-7dbb68
+passos: 7/12
+fases: start..handoff
+artefatos: state/, trace/, evidence/
+# --- stdout ---
+[feat/f1-validar 2a87865] harness: handoff f1-validar
+ 15 files changed, 100 insertions(+)
+ create mode 100644 evidence/20260812T033309Z-7dbb68/01-bearings-branch.txt
+ create mode 100644 evidence/20260812T033309Z-7dbb68/02-bearings-head.txt
+ create mode 100644 evidence/20260812T033309Z-7dbb68/03-smoke-engine.txt
+ create mode 100644 evidence/20260812T033309Z-7dbb68/04-smoke-imagem.txt
+ create mode 100644 evidence/20260812T033309Z-7dbb68/05-smoke-git.txt
+ create mode 100644 evidence/20260812T033309Z-7dbb68/06-pick-branch.txt
+ create mode 100644 evidence/20260812T033309Z-7dbb68/07-pick-branch-existe.txt
+ create mode 100644 evidence/20260812T033309Z-7dbb68/08-pick-checkout.txt
+ create mode 100644 evidence/20260812T033309Z-7dbb68/09-handoff-branch.txt
+ create mode 100644 evidence/doctor/smoke-engine.txt
+ create mode 100644 evidence/doctor/smoke-git.txt
+ create mode 100644 evidence/doctor/smoke-imagem.txt
+ create mode 100644 state/feature-list.json
+ create mode 100644 state/progress.json
+ create mode 100644 trace/20260812T033309Z-7dbb68.jsonl
+
+# --- stderr ---
