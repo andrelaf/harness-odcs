@@ -5,7 +5,7 @@
       "id": "f1-validar",
       "order": 1,
       "title": "Validar contrato contra o schema ODCS",
-      "status": "done"
+      "status": "in_progress"
     },
     {
       "id": "f2-mapear",
