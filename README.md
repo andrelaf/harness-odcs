@@ -216,7 +216,7 @@ Semana 1 de 4. O objetivo é o esqueleto rodando **uma** feature de ponta a pont
 | `run.sh`, `flow.rs`, `state/`, `trace/`, `scripts/` | **em construção** |
 | F1 · Validar — [spec](docs/spec-f1-validar.md) | pronta · lint ODCS + relatório HTML |
 | F2 · Mapear — [spec](docs/spec-f2-mapear.md) | pronta · glossário canônico, cobertura de decisão |
-| F3 · Classificar | Semana 2 |
+| F3 · Classificar — [spec](docs/spec-f3-classificar.md) | pronta · catálogo LGPD em campos ODCS |
 | F4 · Gate + relatório | Semana 3 |
 | Medição (custo, duração, erros) | Semana 3 |
 | README de decisão + demo | Semana 4 |
@@ -230,6 +230,7 @@ src/                      o harness em Rust — fluxo, estado, trace, fases
 tests/                    tabela de transições: ordem, teto, halt
 contracts/<nome>/         um diretório por contrato — só fonte, nada gerado
 glossary/                 o glossário canônico contra o qual os campos são lidos
+classification/           o catálogo LGPD, chaveado por termo do glossário
 state/                    feature-list.json, progress.json
 trace/                    <run_id>.jsonl, append-only
 evidence/                 saída bruta das ferramentas, por run

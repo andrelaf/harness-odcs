@@ -17,18 +17,14 @@
 //! nome do campo e procura a chave. Ambiguidade nao e resolvida, e **nomeada**
 //! — vira lacuna e segue para o humano em F4.
 
+use crate::features::contrato::{self, Campo};
 use crate::flow::Outcome;
 use crate::phases::Run;
 use crate::tools;
-use anyhow::{Context, Result, bail};
+use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::fs;
-
-/// O mesmo alvo de F1. Caminho relativo a raiz: no host resolve com
-/// `root.join(...)`, no container vai como esta, porque a raiz e montada em
-/// `/home/datacontract`.
-const CONTRATO: &str = "contracts/clientes/contract.odcs.yaml";
 
 /// O glossario nao mora em `contracts/` porque nao e um contrato: e o
 /// vocabulario contra o qual todos os contratos sao lidos. Ver
@@ -39,7 +35,7 @@ const GLOSSARIO: &str = "glossary/glossario.yaml";
 
 /// Produz o mapeamento e o grava como proposta.
 pub fn implement(run: &mut Run) -> Outcome {
-    let mapeamento = match compor(run, "implement") {
+    let mapeamento = match mapeamento_atual(run, "f2", "implement") {
         Ok(m) => m,
         Err(e) => return Outcome::Fail(e),
     };
@@ -63,15 +59,15 @@ pub fn implement(run: &mut Run) -> Outcome {
 
 /// Refaz o mapeamento e julga integridade e cobertura.
 pub fn verify(run: &mut Run) -> Outcome {
-    let campos = match extrair_campos(run, "verify") {
+    let campos = match contrato::extrair(run, "f2", "verify") {
         Ok(c) => c,
         Err(e) => return Outcome::Fail(e),
     };
-    let (glossario, gloss_sha) = match carregar_do_disco(run) {
+    let (glossario, gloss_sha) = match glossario_do_disco(run) {
         Ok(g) => g,
         Err(e) => return Outcome::Fail(e),
     };
-    let contrato_sha = match sha_do_contrato(run) {
+    let contrato_sha = match contrato::sha(run) {
         Ok(s) => s,
         Err(e) => return Outcome::Fail(e),
     };
@@ -169,11 +165,15 @@ fn relatorio_legivel(run: &mut Run, m: &Mapeamento) -> Outcome {
 
 // --- Montagem, com I/O --------------------------------------------------------
 
-/// Contrato + glossario -> mapeamento. As duas fases passam por aqui, entao
-/// nao ha como divergirem no que consideram entrada.
-fn compor(run: &mut Run, fase: &str) -> Result<Mapeamento, String> {
-    let campos = extrair_campos(run, fase)?;
-    let (glossario, gloss_sha) = carregar_do_disco(run)?;
+/// Contrato + glossario -> mapeamento. As duas fases de F2 passam por aqui, e
+/// F3 tambem: e assim que a classificacao chega ao termo canonico sem depender
+/// da evidencia de um run anterior. Evidencia e saida, nunca entrada.
+///
+/// `feature` entra no nome do artefato de evidencia porque quem chama nem
+/// sempre e F2.
+pub fn mapeamento_atual(run: &mut Run, feature: &str, fase: &str) -> Result<Mapeamento, String> {
+    let campos = contrato::extrair(run, feature, fase)?;
+    let (glossario, gloss_sha) = glossario_do_disco(run)?;
 
     // Entrada inutilizavel para na preparacao: com alias colidindo entre dois
     // termos nao existe mapeamento a produzir, porque o harness nao escolhe
@@ -186,7 +186,7 @@ fn compor(run: &mut Run, fase: &str) -> Result<Mapeamento, String> {
         ));
     }
 
-    let contrato_sha = sha_do_contrato(run)?;
+    let contrato_sha = contrato::sha(run)?;
     run.note(format!(
         "glossario {} v{} — {} termo(s), sha256 {}",
         GLOSSARIO,
@@ -197,39 +197,9 @@ fn compor(run: &mut Run, fase: &str) -> Result<Mapeamento, String> {
     Ok(mapear(&campos, &glossario, &contrato_sha, &gloss_sha))
 }
 
-/// Quem le o contrato e o motor, nao o harness: `datacontract export
-/// jsonschema`. Ler `schema[].properties[].name` do YAML aqui criaria uma
-/// segunda interpretacao do ODCS no repositorio, e a segunda seria a errada.
-fn extrair_campos(run: &mut Run, fase: &str) -> Result<Vec<Campo>, String> {
-    if let Err(e) = fs::create_dir_all(&run.evidence_dir) {
-        return Err(format!("criando {}: {e}", run.evidence_dir.display()));
-    }
-
-    // Um arquivo por fase: os dois lado a lado sao a evidencia de que a
-    // extracao se repete. Um destino unico faria a segunda fase apagar a
-    // prova da primeira.
-    let destino = format!("evidence/{}/f2-campos-{fase}.json", run.tracer.run_id());
-    let saida = run
-        .datacontract(
-            &format!("{fase}-campos"),
-            &["export", "jsonschema", CONTRATO, "--output", &destino],
-        )
-        .map_err(|e| format!("{e}"))?;
-
-    let bruto = fs::read_to_string(run.cfg.root.join(&destino)).map_err(|e| {
-        format!(
-            "`export jsonschema` saiu com {} e nao deixou {destino} ({e})",
-            saida.exit_code
-        )
-    })?;
-    if !saida.ok() {
-        return Err(format!("`export jsonschema` saiu com {}", saida.exit_code));
-    }
-
-    ler_campos(&bruto).map_err(|e| format!("{e:#}"))
-}
-
-fn carregar_do_disco(run: &Run) -> Result<(Glossario, String), String> {
+/// O glossario do disco, com o sha256 do que foi lido. Publica porque F3
+/// tambem precisa saber contra qual vocabulario esta trabalhando.
+pub fn glossario_do_disco(run: &Run) -> Result<(Glossario, String), String> {
     let path = run.cfg.root.join(GLOSSARIO);
     let bruto = fs::read_to_string(&path).map_err(|e| {
         format!(
@@ -239,15 +209,6 @@ fn carregar_do_disco(run: &Run) -> Result<(Glossario, String), String> {
     })?;
     let glossario = carregar_glossario(&bruto).map_err(|e| format!("{e:#}"))?;
     Ok((glossario, tools::sha256_hex(&bruto)))
-}
-
-/// Identidade da entrada, pelo mesmo motivo de F1: quando dois runs
-/// discordarem, foi o contrato que mudou ou a ferramenta?
-fn sha_do_contrato(run: &Run) -> Result<String, String> {
-    let path = run.cfg.root.join(CONTRATO);
-    fs::read_to_string(&path)
-        .map(|s| tools::sha256_hex(&s))
-        .map_err(|e| format!("contrato `{CONTRATO}` ilegivel em {} ({e})", path.display()))
 }
 
 fn gravar_veredito(run: &mut Run, v: &Veredito) -> Result<()> {
@@ -385,69 +346,6 @@ pub fn normalizar(s: &str) -> String {
     out.trim_matches('_').to_string()
 }
 
-// --- Campos do contrato --------------------------------------------------------
-
-/// Um campo do contrato, reduzido ao que o mapeamento precisa. So metadado:
-/// nome e tipo. Nenhum valor de dado entra aqui — nem poderia, o contrato nao
-/// os contem.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Campo {
-    pub nome: String,
-    pub tipo: String,
-}
-
-/// Funcao pura: o JSON Schema exportado pelo motor em lista de campos.
-///
-/// `BTreeMap` fixa a ordem alfabetica sem depender da feature `preserve_order`
-/// do `serde_json`. Nao e a ordem do contrato; e uma ordem **estavel**, que e o
-/// que o artefato precisa para ser comparavel entre runs.
-pub fn ler_campos(bruto: &str) -> Result<Vec<Campo>> {
-    let schema: JsonSchema =
-        serde_json::from_str(bruto).context("export do motor nao e JSON valido")?;
-
-    // Zero campo nao e contrato vazio, e sinal de que o formato do export
-    // mudou. Passar aqui produziria cobertura de 0/0 campos — um PASS que nao
-    // prova nada.
-    if schema.properties.is_empty() {
-        bail!("export do motor nao trouxe nenhuma propriedade — formato inesperado");
-    }
-
-    Ok(schema
-        .properties
-        .into_iter()
-        .map(|(nome, prop)| Campo {
-            tipo: tipo_legivel(prop.tipo.as_ref()),
-            nome,
-        })
-        .collect())
-}
-
-#[derive(Deserialize)]
-struct JsonSchema {
-    #[serde(default)]
-    properties: BTreeMap<String, PropSchema>,
-}
-
-#[derive(Deserialize)]
-struct PropSchema {
-    #[serde(default, rename = "type")]
-    tipo: Option<serde_json::Value>,
-}
-
-/// `"string"` sai `string`; `["string","null"]` sai `string|null`. O tipo entra
-/// no relatorio como contexto para quem le, nunca como criterio de casamento.
-fn tipo_legivel(v: Option<&serde_json::Value>) -> String {
-    match v {
-        Some(serde_json::Value::String(s)) => s.clone(),
-        Some(serde_json::Value::Array(a)) => a
-            .iter()
-            .filter_map(|x| x.as_str())
-            .collect::<Vec<_>>()
-            .join("|"),
-        _ => "desconhecido".to_string(),
-    }
-}
-
 // --- Mapeamento ----------------------------------------------------------------
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
@@ -540,7 +438,7 @@ pub fn mapear(
         .count();
 
     Mapeamento {
-        contrato: CONTRATO.to_string(),
+        contrato: contrato::CAMINHO.to_string(),
         contrato_sha256: contrato_sha.to_string(),
         glossario: GLOSSARIO.to_string(),
         glossario_versao: glossario.version.clone(),
@@ -899,34 +797,6 @@ termos:
 
         let d = conferir_cobertura(&campos, &m, &g);
         assert!(d.iter().any(|x| x.contains("resumo nao bate")));
-    }
-
-    #[test]
-    fn campos_saem_do_export_do_motor() {
-        let bruto = r#"{
-            "type": "object",
-            "properties": {
-                "cpf": {"type": "string", "description": "x"},
-                "cep": {"type": ["string", "null"]}
-            }
-        }"#;
-        let campos = ler_campos(bruto).unwrap();
-        // Ordem alfabetica, estavel entre runs.
-        assert_eq!(campos[0].nome, "cep");
-        assert_eq!(campos[0].tipo, "string|null");
-        assert_eq!(campos[1].nome, "cpf");
-        assert_eq!(campos[1].tipo, "string");
-    }
-
-    /// Zero propriedade daria cobertura 0/0 — um PASS que nao prova nada.
-    #[test]
-    fn export_sem_propriedade_e_erro_e_nao_pass_vazio() {
-        assert!(ler_campos(r#"{"type": "object", "properties": {}}"#).is_err());
-    }
-
-    #[test]
-    fn export_quebrado_e_erro_e_nao_pass_silencioso() {
-        assert!(ler_campos("nao sou json").is_err());
     }
 
     /// A comparacao byte a byte de `verify` so faz sentido se a serializacao

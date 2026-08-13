@@ -1,0 +1,94 @@
+# Catalogo de classificacao de privacidade — LGPD (Lei 13.709/2018).
+#
+# Os campos falam ODCS, nao um vocabulario proprio: `classification` e o campo
+# do padrao (secao "Classification & Security" do editor) e `pii`/`sensivel`
+# viram `tags: [pii, sensitive]` no contrato enriquecido, que e a convencao do
+# proprio ODCS para marcar dado pessoal. Ver classification/README.md.
+#
+# Chaveado por **termo do glossario**, nunca por nome de campo. E o que faz
+# `cpf`, `nr_cpf` e `documento_cpf` receberem a mesma resposta: os tres casam
+# com `pessoa.cpf` em F2, e a classificacao mora no termo.
+
+version: 1.0.0
+
+classificacoes:
+  - termo: pessoa.identificador_interno
+    classification: confidential
+    pii: true
+    sensivel: false
+    justificativa: >-
+      Chave pseudonimizada. A pseudonimizacao nao descaracteriza o dado
+      pessoal enquanto a organizacao mantiver, ainda que separada, a
+      informacao adicional que permite reassociar a chave a pessoa.
+    referencia: LGPD art. 5, I c/c art. 13, par. 4
+
+  - termo: pessoa.nome_completo
+    classification: confidential
+    pii: true
+    sensivel: false
+    justificativa: >-
+      Nome civil identifica a pessoa natural sem necessidade de cruzamento com
+      outra base.
+    referencia: LGPD art. 5, I
+
+  # `restricted` e nao `confidential`: numero de documento nacional e chave de
+  # cruzamento com quase qualquer base do pais, e vazamento e irreversivel —
+  # ninguem troca de CPF.
+  - termo: pessoa.cpf
+    classification: restricted
+    pii: true
+    sensivel: false
+    justificativa: >-
+      Identificador univoco de pessoa natural emitido pela Receita Federal.
+      Identifica sozinho e serve de chave de cruzamento com praticamente
+      qualquer outra base do pais.
+    referencia: LGPD art. 5, I
+
+  - termo: pessoa.data_nascimento
+    classification: confidential
+    pii: true
+    sensivel: false
+    justificativa: >-
+      Nao identifica sozinha, mas compoe o quase-identificador classico
+      (data de nascimento + sexo + localidade), que reidentifica parcela alta
+      de uma populacao quando combinado.
+    referencia: LGPD art. 5, I
+
+  - termo: contato.email
+    classification: confidential
+    pii: true
+    sensivel: false
+    justificativa: >-
+      Endereco de contato individual. Na pratica funciona como identificador
+      de conta e alcanca a pessoa diretamente.
+    referencia: LGPD art. 5, I
+
+  - termo: contato.telefone
+    classification: confidential
+    pii: true
+    sensivel: false
+    justificativa: >-
+      Numero atribuido a uma linha individual e, no Brasil, vinculado a um CPF
+      no cadastro da operadora.
+    referencia: LGPD art. 5, I
+
+  - termo: endereco.cep
+    classification: confidential
+    pii: true
+    sensivel: false
+    justificativa: >-
+      CEP de residencia nao identifica sozinho, mas no Brasil chega ao nivel
+      de logradouro e reidentifica quando combinado com data de nascimento.
+    referencia: LGPD art. 5, I
+
+  # A unica entrada nao-PII do catalogo, e a que mais merece leitura.
+  - termo: cadastro.data_criacao
+    classification: internal
+    pii: false
+    sensivel: false
+    justificativa: >-
+      Descreve o ciclo de vida do registro, nao a pessoa: isolada, nao
+      identifica ninguem nem revela atributo de pessoa natural. Numa linha ja
+      identificada ela herda o carater pessoal do conjunto — risco que se
+      trata no nivel do dataset, nao no do campo.
+    referencia: LGPD art. 5, I — por exclusao

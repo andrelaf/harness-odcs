@@ -12,8 +12,13 @@
 //! shell e burro": a segunda IDE passaria a depender do shell certo estar no
 //! PATH para o fluxo decidir a mesma coisa.
 
+/// O contrato ODCS, lido pelo motor. Fora das features porque F2, F3 e F4
+/// leem o mesmo arquivo.
+pub mod contrato;
+
 pub mod f1_validar;
 pub mod f2_mapear;
+pub mod f3_classificar;
 
 use crate::flow::{Outcome, Phase};
 use crate::phases::Run;
@@ -26,6 +31,8 @@ pub fn dispatch(run: &mut Run, phase: Phase) -> Option<Outcome> {
         ("f1-validar", Phase::Verify) => Some(f1_validar::verify(run)),
         ("f2-mapear", Phase::Implement) => Some(f2_mapear::implement(run)),
         ("f2-mapear", Phase::Verify) => Some(f2_mapear::verify(run)),
+        ("f3-classificar", Phase::Implement) => Some(f3_classificar::implement(run)),
+        ("f3-classificar", Phase::Verify) => Some(f3_classificar::verify(run)),
         _ => None,
     }
 }
