@@ -1,0 +1,11 @@
+{"ts":"2026-08-13T03:46:59.3188812Z","run_id":"20260813T034659Z-fb4444","seq":1,"feature":"f4-gate","to":"start","event":"run_start","step":0,"msg":"teto 12 passos"}
+{"ts":"2026-08-13T03:46:59.3191755Z","run_id":"20260813T034659Z-fb4444","seq":2,"feature":"f4-gate","to":"start","event":"phase_start","step":0,"msg":""}
+{"ts":"2026-08-13T03:46:59.3193613Z","run_id":"20260813T034659Z-fb4444","seq":3,"feature":"f4-gate","from":"start","event":"phase_end","result":"PASS","duration_ms":0,"step":1,"msg":"run_id 20260813T034659Z-fb4444"}
+{"ts":"2026-08-13T03:46:59.3215193Z","run_id":"20260813T034659Z-fb4444","seq":4,"feature":"f4-gate","to":"plan","event":"phase_start","step":1,"msg":""}
+{"ts":"2026-08-13T03:46:59.3237508Z","run_id":"20260813T034659Z-fb4444","seq":5,"feature":"f4-gate","from":"plan","event":"phase_end","result":"PASS","duration_ms":0,"step":2,"msg":"feature f4-gate — Gate humano + relatorio de lacunas"}
+{"ts":"2026-08-13T03:46:59.3260733Z","run_id":"20260813T034659Z-fb4444","seq":6,"feature":"f4-gate","to":"bearings","event":"phase_start","step":2,"msg":""}
+{"ts":"2026-08-13T03:46:59.3489207Z","run_id":"20260813T034659Z-fb4444","seq":7,"feature":"f4-gate","event":"tool_exec","result":"PASS","duration_ms":22,"exit_code":0,"step":2,"msg":"git rev-parse --abbrev-ref HEAD | evidence=01-bearings-branch.txt sha256=2843da9de4870c31"}
+{"ts":"2026-08-13T03:46:59.3710146Z","run_id":"20260813T034659Z-fb4444","seq":8,"feature":"f4-gate","event":"tool_exec","result":"PASS","duration_ms":21,"exit_code":0,"step":2,"msg":"git log -1 --format=%h %s | evidence=02-bearings-head.txt sha256=63b62533949fca14"}
+{"ts":"2026-08-13T03:46:59.3710835Z","run_id":"20260813T034659Z-fb4444","seq":9,"feature":"f4-gate","from":"bearings","event":"phase_end","result":"PASS","duration_ms":44,"step":3,"msg":"branch feat/f4-gate | HEAD 6058011 feat: `--json` e handoff com verificacao e riscos"}
+{"ts":"2026-08-13T03:46:59.37283Z","run_id":"20260813T034659Z-fb4444","seq":10,"feature":"f4-gate","to":"smoke","event":"phase_start","step":3,"msg":""}
+{"ts":"2026-08-13T03:47:00.2158751Z","run_id":"20260813T034659Z-fb4444","seq":11,"feature":"f4-gate","event":"tool_exec","result":"PASS","duration_ms":839,"exit_code":0,"step":3,"msg":"docker info --format {{.ServerVersion}} | evidence=03-smoke-engine.txt sha256=aaa3c9962de64c23"}
