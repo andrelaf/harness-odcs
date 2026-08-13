@@ -8,7 +8,7 @@
 //! aqui — so nomes, decisoes e referencias para `evidence/`.
 
 use anyhow::{Context, Result};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use std::fs::{self, File, OpenOptions};
 use std::io::Write;
 use std::path::{Path, PathBuf};
@@ -37,23 +37,32 @@ pub fn new_run_id() -> String {
     format!("{stamp}-{:06x}", nanos & 0x00ff_ffff)
 }
 
-#[derive(Debug, Serialize)]
+/// Um evento do trace.
+///
+/// `Deserialize` junto de `Serialize` porque a medicao **le** este mesmo tipo:
+/// `metrics` e uma derivacao do trace, e nao uma segunda instrumentacao. Um
+/// tipo de leitura proprio poderia divergir do que e escrito, e a metrica
+/// passaria a medir outra coisa que nao a execucao.
+///
+/// `#[serde(default)]` nos opcionais porque a escrita omite campo ausente:
+/// sem ele, todo evento sem `result` seria erro de parse.
+#[derive(Debug, Serialize, Deserialize)]
 pub struct Event {
     pub ts: String,
     pub run_id: String,
     pub seq: u64,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub feature: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub from: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub to: Option<String>,
     pub event: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub result: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub duration_ms: Option<u128>,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub exit_code: Option<i32>,
     pub step: u32,
     pub msg: String,

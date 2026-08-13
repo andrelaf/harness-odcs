@@ -9,6 +9,7 @@ pub mod config;
 pub mod exit;
 pub mod features;
 pub mod flow;
+pub mod metrics;
 pub mod phases;
 pub mod state;
 pub mod tools;

@@ -1,6 +1,6 @@
 # Spec do Harness — contrato congelado
 
-> **Versão da spec:** 3 — ver [Mudanças](#12-mudanças)
+> **Versão da spec:** 4 — ver [Mudanças](#12-mudanças)
 > **Status:** congelada. Mudança aqui é decisão explícita, não efeito colateral de implementação.
 > **Escopo:** o harness. Nada do classificador. A spec de cada feature de domínio (F1–F4) é escrita na sessão da própria feature.
 
@@ -38,6 +38,7 @@ Corolário: existe **um único** ponto de entrada, `run.sh`. Não há `run.ps1`,
 | `verify` | Re-executa apenas a fase `verify` da feature corrente. | sim (trace) |
 | `handoff` | Re-executa apenas a fase `handoff` da feature corrente. | sim |
 | `doctor` | Executa as checagens de ambiente e reporta PASS/FAIL por item. | não |
+| `metrics` | Deriva custo, duração, erros e resultado de `trace/` e regenera `metrics/metrics.jsonl`. | não (só `metrics/`) |
 | `approve <feature>` | Libera uma feature em `Blocked` e **arquiva o pedido de gate** que a bloqueou. | sim |
 | `reset <feature>` | Devolve uma feature `Done` ou `Failed` para `Pending`, para reexecução. | sim |
 
@@ -279,6 +280,13 @@ Verificados ao carregar o estado. Violação → exit `4`.
 
 A Semana 3 pede custo, duração, número de erros e resultado por execução. Com esses campos presentes desde a Semana 1, `metrics.jsonl` vira uma **derivação** do trace — não uma segunda instrumentação paralela que pode divergir.
 
+Cumprido: `./run.sh metrics` lê `trace/*.jsonl` e regenera `metrics/metrics.jsonl` inteiro. Nenhum contador novo é escrito durante a execução, não há estado incremental para corromper, e apagar `metrics/` não perde nada.
+
+Duas leituras que a derivação obriga a separar:
+
+- **Erro é fase reprovada**, não exit code diferente de zero. O fluxo sonda o repositório com `git rev-parse --verify` para saber se a branch existe, e o exit `1` dessa sondagem é a resposta "não existe". Somar as duas coisas inflaria a contagem de erros com o funcionamento normal — por isso `erros` e `ferramentas_nao_zero` são campos distintos.
+- **Run sem `run_end` é `INCOMPLETO`**, não `FAIL`. Interrompido por fora não é reprovado, e tratar como falha erraria justamente o número que o brief pede.
+
 ### Trave de privacidade
 
 O trace é o artefato que circula. Portanto:
@@ -347,6 +355,17 @@ Ideias novas de qualquer natureza vão para `BACKLOG-FUTURO.md` — não entram 
 ## 12. Mudanças
 
 Registro das decisões que alteraram este contrato depois de congelado.
+
+### Versão 4 — 13/08/2026
+
+**Adicionado `metrics`** (seções 2 e 6). Não é mudança de comportamento do
+fluxo: é a materialização do que a seção 6 já prometia ao exigir `duration_ms`
+e `exit_code` desde a Semana 1.
+
+Escopo estreito de propósito: o comando **só lê** `trace/` e escreve
+`metrics/metrics.jsonl`. Não toca em `state/`, não participa do fluxo e não é
+chamado por nenhuma fase. Instrumentar a medição dentro das fases criaria a
+segunda fonte de verdade que a seção 6 existe para evitar.
 
 ### Versão 3 — 13/08/2026
 

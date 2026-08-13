@@ -48,6 +48,12 @@ impl Config {
         self.root.join("evidence")
     }
 
+    /// A medicao derivada de `trace/`. Regenerada inteira a cada `metrics`, e
+    /// por isso descartavel sem perda.
+    pub fn metrics_path(&self) -> PathBuf {
+        self.root.join("metrics").join("metrics.jsonl")
+    }
+
     pub fn feature_list_path(&self) -> PathBuf {
         self.state_dir().join("feature-list.json")
     }

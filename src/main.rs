@@ -10,6 +10,7 @@ use harness::checks;
 use harness::config::Config;
 use harness::exit::Exit;
 use harness::flow::{self, HaltReason, Outcome, Phase, Transition};
+use harness::metrics;
 use harness::phases::{self, Run};
 use harness::state::{
     self, Aprovacao, Aprovacoes, FeatureList, FeatureStatus, GatePendente, Progress, RunStatus,
@@ -52,6 +53,8 @@ enum Cmd {
     Handoff,
     /// Checa o ambiente, item a item.
     Doctor,
+    /// Deriva custo, duracao, erros e resultado de `trace/`.
+    Metrics,
     /// Libera uma feature bloqueada para prosseguir.
     Approve { feature: String },
     /// Devolve uma feature concluida ou falhada para `pending`.
@@ -76,6 +79,7 @@ fn main() {
         Cmd::Verify => cmd_single(&cfg, Phase::Verify),
         Cmd::Handoff => cmd_single(&cfg, Phase::Handoff),
         Cmd::Doctor => cmd_doctor(&cfg),
+        Cmd::Metrics => cmd_metrics(&cfg),
         Cmd::Approve { feature } => cmd_approve(&cfg, feature),
         Cmd::Reset { feature } => cmd_reset(&cfg, feature),
     };
@@ -184,6 +188,99 @@ fn cmd_doctor(cfg: &Config) -> Result<i32> {
         eprintln!("\n{failed} checagem(ns) falharam");
         Ok(Exit::PhaseFail.code())
     }
+}
+
+/// Deriva a medicao de `trace/` e a imprime.
+///
+/// Regenera `metrics/metrics.jsonl` inteiro a cada chamada. Nao ha acumulo
+/// incremental para corromper, e a fonte continua sendo uma so — o trace.
+///
+/// A saida nao e um despejo de numeros: ela responde as duas perguntas que o
+/// brief cobra da medicao, "onde travou" e "onde saiu caro", porque numero sem
+/// leitura nao e medicao, e enfeite.
+fn cmd_metrics(cfg: &Config) -> Result<i32> {
+    let metricas = metrics::coletar(&cfg.trace_dir())?;
+    if metricas.is_empty() {
+        println!("nenhum run em {} — nada a medir", cfg.trace_dir().display());
+        return Ok(Exit::Pass.code());
+    }
+
+    let destino = cfg.metrics_path();
+    metrics::gravar(&metricas, &destino)?;
+
+    println!(
+        "{:<26} {:<16} {:<11} {:>4} {:>9} {:>9} {:>6}",
+        "run_id", "feature", "resultado", "psos", "dur_ms", "ferr_ms", "erros"
+    );
+    for m in &metricas {
+        println!(
+            "{:<26} {:<16} {:<11} {:>4} {:>9} {:>9} {:>6}",
+            m.run_id,
+            m.feature.as_deref().unwrap_or("-"),
+            m.resultado,
+            m.passos,
+            m.duracao_ms,
+            m.duracao_ferramentas_ms,
+            m.erros
+        );
+    }
+
+    let r = metrics::resumir(&metricas);
+    println!("\n{} run(s) — {}", r.runs, distribuicao(&r));
+    println!(
+        "duracao somada  : {} ms ({:.1} s)",
+        r.duracao_ms,
+        r.duracao_ms as f64 / 1000.0
+    );
+    if let Some(f) = r.fracao_em_ferramentas() {
+        println!(
+            // Uma casa decimal, e nao zero: 99,6% arredondado para 100% diria
+            // que o harness custa nada, o que e quase verdade e nao e verdade.
+            "em ferramenta   : {} ms ({:.1}% do total, {} invocacoes)",
+            r.duracao_ferramentas_ms,
+            f * 100.0,
+            r.ferramentas
+        );
+    }
+    if let Some((fase, ms)) = r.fase_mais_cara() {
+        println!("fase mais cara  : {fase} ({ms} ms somados)");
+    }
+    println!(
+        "erros           : {} fase(s) reprovada(s) · {} bloqueio(s) · {} aborto(s)",
+        r.erros, r.bloqueios, r.abortos
+    );
+
+    // Onde travou. Sem isto a tabela diria que houve parada, mas nao por que —
+    // e o motivo e a unica parte acionavel da medicao.
+    let paradas: Vec<&metrics::MetricaDeRun> = metricas
+        .iter()
+        .filter(|m| m.motivo_da_parada.is_some())
+        .collect();
+    if !paradas.is_empty() {
+        println!("\nonde travou:");
+        for m in paradas {
+            println!(
+                "  {} — {}",
+                m.run_id,
+                m.motivo_da_parada.as_deref().unwrap_or("")
+            );
+        }
+    }
+
+    println!("\nmedicao em {}", destino.display());
+    println!(
+        "derivada de {} — nao ha contador paralelo; apagar metrics/ nao perde nada",
+        cfg.trace_dir().display()
+    );
+    Ok(Exit::Pass.code())
+}
+
+fn distribuicao(r: &metrics::Resumo) -> String {
+    r.por_resultado
+        .iter()
+        .map(|(k, v)| format!("{v} {k}"))
+        .collect::<Vec<_>>()
+        .join(", ")
 }
 
 /// Libera uma feature bloqueada e arquiva o pedido de gate que a bloqueou.

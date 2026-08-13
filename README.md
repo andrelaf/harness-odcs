@@ -136,6 +136,45 @@ Nada foi escrito no contrato. Quem decide lê o pedido e libera:
 
 ---
 
+## Medição
+
+```bash
+./run.sh metrics
+```
+
+Deriva custo, duração, erros e resultado **de `trace/`** e regenera `metrics/metrics.jsonl`. Não há contador paralelo: `duration_ms` e `exit_code` estão no trace desde o primeiro dia justamente para que a métrica nascesse daqui. Apagar `metrics/` não perde nada.
+
+### A leitura honesta — 12 runs
+
+| | |
+|---|---|
+| Runs | 12 — 9 `PASS`, 3 `HALT` |
+| Duração somada | 69,8 s |
+| Em ferramenta externa | 69,6 s — **99,6%**, em 132 invocações |
+| Fase mais cara | `smoke` (17,2 s somados) |
+| Erros | 1 fase reprovada · 1 bloqueio · 2 abortos |
+
+**Onde saiu caro: em lugar nenhum que o harness controle.** 99,6% do tempo é espera de processo externo — `docker run` do `datacontract-cli`, a ~600 ms de partida por invocação. A máquina de estados, o trace, a leitura do glossário e a classificação inteira somam os 0,4% restantes. Duas consequências que valem mais que o número:
+
+- **Otimizar o harness não paga.** O ganho possível está em reduzir invocações de container, não em código Rust.
+- **O custo escala com invocações, não com campos.** Classificar 9 campos ou 90 custa praticamente o mesmo; rodar o fluxo duas vezes custa o dobro. É o que sustenta a leitura de que o harness se paga com volume de contratos.
+
+Não há custo de token: nenhum modelo roda dentro do fluxo. A classificação é consulta a catálogo, determinística.
+
+**Onde travou** — os três desfechos de parada previstos na spec aconteceram de verdade, cada um uma vez:
+
+| Run | Parada | Exit |
+|---|---|---|
+| `…033351Z-ad8cec` | teto de 4 passos atingido em `smoke` | `3` |
+| `…041954Z-a69d54` | `FAIL` em `verify` — `logicalType` inválido no contrato | `1` |
+| `…031348Z-11391c` | bloqueado em `implement` — 2 lacunas aguardando decisão humana | `5` |
+
+O teto de passos não é demonstrável só em teste: **está no registro**. O run `ad8cec` rodou com `max_steps: 4` e abortou em `smoke`, como a tabela de decisão manda — e é por isso que o teto mora em `progress.json`, ajustável sem recompilar.
+
+Limites do que está medido, ditos em voz alta: a duração é a **soma das fases**, não relógio de parede — fica de fora a escrita de estado entre fases, sub-milissegundo. E `erros` conta fase reprovada, nunca exit code diferente de zero: o fluxo pergunta ao git se uma branch existe, e o exit `1` dessa sondagem é a resposta "não existe", não uma falha. As duas contagens são campos separados no `metrics.jsonl`.
+
+---
+
 ## Editor de contratos ODCS
 
 Há **dois modos**, e resolvem problemas diferentes. Ambos verificados nesta máquina.
@@ -241,7 +280,7 @@ Semana 1 de 4. O objetivo é o esqueleto rodando **uma** feature de ponta a pont
 | F2 · Mapear — [spec](docs/spec-f2-mapear.md) | pronta · glossário canônico, cobertura de decisão |
 | F3 · Classificar — [spec](docs/spec-f3-classificar.md) | pronta · catálogo LGPD em campos ODCS |
 | F4 · Gate + relatório — [spec](docs/spec-f4-gate.md) | pronta · contrato enriquecido, lacunas e pausa humana |
-| Medição (custo, duração, erros) | Semana 3 |
+| Medição (custo, duração, erros) | pronta · `./run.sh metrics`, derivada do trace |
 | README de decisão + demo | Semana 4 |
 
 ## Estrutura do repositório
@@ -256,6 +295,7 @@ glossary/                 o glossário canônico contra o qual os campos são li
 classification/           o catálogo LGPD, chaveado por termo do glossário
 state/                    feature-list.json, progress.json, gate-pendente.json, aprovacoes.json
 trace/                    <run_id>.jsonl, append-only
+metrics/                  metrics.jsonl — derivado de trace/, regenerável
 evidence/                 saída bruta das ferramentas, por run
 docs/                     brief, contexto, spec
 ```
