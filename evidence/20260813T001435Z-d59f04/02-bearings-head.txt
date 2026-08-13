@@ -1,0 +1,5 @@
+# comando: git log -1 --format=%h %s
+# --- stdout ---
+6914c61 harness: cauda do run 20260812T171501Z-6ce4cc
+
+# --- stderr ---

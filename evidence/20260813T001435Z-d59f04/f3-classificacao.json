@@ -1,0 +1,123 @@
+{
+  "contrato": "contracts/clientes/contract.odcs.yaml",
+  "contrato_sha256": "19121d7f9d6672a770ddcb8050d596c2af1e64a54e747d06a3b73c09b74b4db1",
+  "glossario": "glossary/glossario.yaml",
+  "glossario_versao": "1.0.0",
+  "glossario_sha256": "d4f3c8d60452aaaabc6fe7c0cf01a9255c61e8aa56f73d0919e2dcf146a6c355",
+  "catalogo": "classification/catalogo-lgpd.yaml",
+  "catalogo_versao": "1.0.0",
+  "catalogo_sha256": "af8c1227a6af10e956c6947844e744584c5ccc142544e43ced9e5ebc4405a887",
+  "resumo": {
+    "campos": 9,
+    "classificados": 7,
+    "nao_classificados": 2,
+    "pii": 6,
+    "sensivel": 0,
+    "por_nivel": {
+      "confidential": 5,
+      "internal": 1,
+      "restricted": 1
+    }
+  },
+  "campos": [
+    {
+      "campo": "cep",
+      "tipo": "string|null",
+      "termo": "endereco.cep",
+      "situacao": "classificado",
+      "classification": "confidential",
+      "pii": true,
+      "sensivel": false,
+      "justificativa": "CEP de residencia nao identifica sozinho, mas no Brasil chega ao nivel de logradouro e reidentifica quando combinado com data de nascimento.",
+      "referencia": "LGPD art. 5, I"
+    },
+    {
+      "campo": "cpf",
+      "tipo": "string",
+      "termo": "pessoa.cpf",
+      "situacao": "classificado",
+      "classification": "restricted",
+      "pii": true,
+      "sensivel": false,
+      "justificativa": "Identificador univoco de pessoa natural emitido pela Receita Federal. Identifica sozinho e serve de chave de cruzamento com praticamente qualquer outra base do pais.",
+      "referencia": "LGPD art. 5, I"
+    },
+    {
+      "campo": "data_cadastro",
+      "tipo": "string|null",
+      "termo": "cadastro.data_criacao",
+      "situacao": "classificado",
+      "classification": "internal",
+      "pii": false,
+      "sensivel": false,
+      "justificativa": "Descreve o ciclo de vida do registro, nao a pessoa: isolada, nao identifica ninguem nem revela atributo de pessoa natural. Numa linha ja identificada ela herda o carater pessoal do conjunto — risco que se trata no nivel do dataset, nao no do campo.",
+      "referencia": "LGPD art. 5, I — por exclusao"
+    },
+    {
+      "campo": "data_nascimento",
+      "tipo": "string|null",
+      "termo": "pessoa.data_nascimento",
+      "situacao": "classificado",
+      "classification": "confidential",
+      "pii": true,
+      "sensivel": false,
+      "justificativa": "Nao identifica sozinha, mas compoe o quase-identificador classico (data de nascimento + sexo + localidade), que reidentifica parcela alta de uma populacao quando combinado.",
+      "referencia": "LGPD art. 5, I"
+    },
+    {
+      "campo": "email",
+      "tipo": "string",
+      "termo": "contato.email",
+      "situacao": "classificado",
+      "classification": "confidential",
+      "pii": true,
+      "sensivel": false,
+      "justificativa": "Endereco de contato individual. Na pratica funciona como identificador de conta e alcanca a pessoa diretamente.",
+      "referencia": "LGPD art. 5, I"
+    },
+    {
+      "campo": "id_cliente",
+      "tipo": "string",
+      "termo": "pessoa.identificador_interno",
+      "situacao": "classificado",
+      "classification": "confidential",
+      "pii": true,
+      "sensivel": false,
+      "justificativa": "Chave pseudonimizada. A pseudonimizacao nao descaracteriza o dado pessoal enquanto a organizacao mantiver, ainda que separada, a informacao adicional que permite reassociar a chave a pessoa.",
+      "referencia": "LGPD art. 5, I c/c art. 13, par. 4"
+    },
+    {
+      "campo": "nome_completo",
+      "tipo": "string",
+      "termo": "pessoa.nome_completo",
+      "situacao": "classificado",
+      "classification": "confidential",
+      "pii": true,
+      "sensivel": false,
+      "justificativa": "Nome civil identifica a pessoa natural sem necessidade de cruzamento com outra base.",
+      "referencia": "LGPD art. 5, I"
+    },
+    {
+      "campo": "segmento",
+      "tipo": "string|null",
+      "termo": null,
+      "situacao": "nao_classificado",
+      "classification": null,
+      "pii": null,
+      "sensivel": null,
+      "justificativa": "campo sem termo no glossario (lacuna de F2) — classificar exige decisao humana",
+      "referencia": null
+    },
+    {
+      "campo": "valor_total_compras",
+      "tipo": "number|null",
+      "termo": null,
+      "situacao": "nao_classificado",
+      "classification": null,
+      "pii": null,
+      "sensivel": null,
+      "justificativa": "campo sem termo no glossario (lacuna de F2) — classificar exige decisao humana",
+      "referencia": null
+    }
+  ]
+}

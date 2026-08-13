@@ -17,7 +17,7 @@
       "id": "f3-classificar",
       "order": 3,
       "title": "Classificar PII/LGPD por campo",
-      "status": "pending"
+      "status": "done"
     },
     {
       "id": "f4-gate",

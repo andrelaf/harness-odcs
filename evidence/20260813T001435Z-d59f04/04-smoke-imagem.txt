@@ -1,0 +1,5 @@
+# comando: docker image inspect --format {{index .RepoDigests 0}} datacontract/cli:1.1.0
+# --- stdout ---
+datacontract/cli@sha256:f7fa02d649f4992dd8297bb428ece7403d688e881cf4a386673e250cb678657b
+
+# --- stderr ---
