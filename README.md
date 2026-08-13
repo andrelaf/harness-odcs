@@ -144,17 +144,17 @@ Nada foi escrito no contrato. Quem decide lê o pedido e libera:
 
 Deriva custo, duração, erros e resultado **de `trace/`** e regenera `metrics/metrics.jsonl`. Não há contador paralelo: `duration_ms` e `exit_code` estão no trace desde o primeiro dia justamente para que a métrica nascesse daqui. Apagar `metrics/` não perde nada.
 
-### A leitura honesta — 13 runs
+### A leitura honesta — 14 runs
 
 | | |
 |---|---|
-| Runs | 13 — 9 `PASS`, 4 `HALT` |
-| Duração somada | 73,5 s |
-| Em ferramenta externa | 73,2 s — **99,6%**, em 139 invocações |
-| Fase mais cara | `smoke` (17,2 s somados) |
+| Runs | 14 — 10 `PASS`, 4 `HALT` |
+| Duração somada | 81,5 s |
+| Em ferramenta externa | 81,1 s — **99,6%**, em 153 invocações |
+| Fase mais cara | `verify` (20,2 s somados) |
 | Erros | 1 fase reprovada · 2 bloqueios · 2 abortos |
 
-**Onde saiu caro: em lugar nenhum que o harness controle.** 99,6% do tempo é espera de processo externo — `docker run` do `datacontract-cli`, a ~600 ms de partida por invocação. A máquina de estados, o trace, a leitura do glossário e a classificação inteira somam os 0,4% restantes. Duas consequências que valem mais que o número:
+**Onde saiu caro: em lugar nenhum que o harness controle.** 99,6% do tempo é espera de processo externo — `docker run` do `datacontract-cli`, a ~530 ms de partida por invocação. A máquina de estados, o trace, a leitura do glossário e a classificação inteira somam os 0,4% restantes. Duas consequências que valem mais que o número:
 
 - **Otimizar o harness não paga.** O ganho possível está em reduzir invocações de container, não em código Rust.
 - **O custo escala com invocações, não com campos.** Classificar 9 campos ou 90 custa praticamente o mesmo; rodar o fluxo duas vezes custa o dobro. É o que sustenta a leitura de que o harness se paga com volume de contratos.

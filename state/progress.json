@@ -2,11 +2,11 @@
   "schema_version": 1,
   "run_id": "20260813T034659Z-fb4444",
   "current_feature": "f4-gate",
-  "current_phase": "handoff",
-  "step_count": 7,
+  "current_phase": null,
+  "step_count": 9,
   "max_steps": 12,
-  "run_status": "running",
+  "run_status": "done",
   "last_result": "PASS",
-  "last_transition_at": "2026-08-13T03:47:07.104917Z",
+  "last_transition_at": "2026-08-13T03:47:07.2985744Z",
   "attempts": 12
 }

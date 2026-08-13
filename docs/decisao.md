@@ -26,7 +26,7 @@ vocabulário em semanas diferentes, deixando rastro que sobrevive à auditoria.
 | Custo de token | **zero** — nenhum modelo roda no fluxo |
 | Custo fixo de construção | 4 semanas, ~6.400 linhas de Rust |
 
-99,6% do tempo de execução é espera de processo externo (527 ms por invocação de
+99,6% do tempo de execução é espera de processo externo (530 ms por invocação de
 `docker run`). O harness em si — máquina de estados, trace, estado, mapeamento e
 classificação inteiros — custa os 0,4% restantes.
 
@@ -91,7 +91,7 @@ primeiro contrato com objeto aninhado vai expor isso.
 Ordem de chaves e propriedades é preservada; comentários e linhas em branco,
 não.
 
-**A escala esbarra na partida do container.** 527 ms por invocação, ~11 por
+**A escala esbarra na partida do container.** 530 ms por invocação, ~11 por
 execução. Mil contratos são cerca de 1h40 só de partida de Docker. O desenho
 precisaria de lote ou de um CLI de vida longa — e essa é a mudança que o número
 justifica, nenhuma outra.
@@ -123,7 +123,7 @@ construir automação em cima dela.
   anterior em vez da `main`, e a `main` nunca recebeu nada. Funciona, mas o
   histórico não mostra quatro entregas independentes — mostra uma só, longa.
   Merge de volta ao fim de cada feature, desde F1.
-- **`evidence/` cresce sem política de retenção.** 13 execuções já deixaram
+- **`evidence/` cresce sem política de retenção.** 14 execuções já deixaram
   dezenas de arquivos. Precisa de expiração antes de virar problema.
 - **O hash do gate cobre o texto do item.** Reescrever a frase de um `detalhe`
   invalida aprovações antigas. Falha fechada, que é o lado certo de errar, mas

@@ -173,17 +173,17 @@ sequência que o CI executa.
 ./run.sh metrics
 ```
 
-Números reais, 13 execuções:
+Números reais, 14 execuções:
 
 | | |
 |---|---|
-| Runs | 13 — 9 `PASS`, 4 `HALT` |
-| Duração somada | 73,5 s |
-| Em ferramenta externa | **99,6%**, em 139 invocações |
+| Runs | 14 — 10 `PASS`, 4 `HALT` |
+| Duração somada | 81,5 s |
+| Em ferramenta externa | **99,6%**, em 153 invocações |
 | Erros | 1 fase reprovada · 2 bloqueios · 2 abortos |
 
 **A leitura, que vale mais que a tabela:** 99,6% do tempo é espera de container,
-a ~527 ms por invocação. Otimizar o harness não paga — o custo escala com
+a ~530 ms por invocação. Otimizar o harness não paga — o custo escala com
 invocações, não com número de campos. E não há custo de token: nenhum modelo
 roda no fluxo.
 
@@ -233,6 +233,6 @@ estado volta ao lugar.
 | *"Onde está o agente/LLM?"* | Em lugar nenhum dentro do fluxo. A classificação é consulta a catálogo. O agente escreveu o harness; ele não opera dentro dele. |
 | *"E se o catálogo estiver errado?"* | O harness não julga a lei. Ele garante que a decisão veio do catálogo, com referência legal, e que mudá-la passa pelo gate. |
 | *"Por que não usar um LLM para classificar?"* | Classificaria mais rápido e perderia cobertura verificável, justificativa por decisão e controle do que é persistido. Se essas garantias não forem requisito, um LLM é a escolha certa e isto é caro demais. |
-| *"Isso escala?"* | Até a partida do container. 527 ms × 11 invocações por run. Acima de algumas centenas de contratos, precisa de lote ou CLI de vida longa. |
+| *"Isso escala?"* | Até a partida do container. 530 ms × 11 invocações por run. Acima de algumas centenas de contratos, precisa de lote ou CLI de vida longa. |
 | *"O que acontece se o agente esquecer um campo?"* | Não é possível esquecer sem reprovar: `verify` confere que cada campo do contrato aparece exatamente uma vez, e campo a mais ou a menos é FAIL. |
 | *"Por que Rust?"* | Porque a política precisa ser um binário único, testável sem disco nem container, e igual nas duas IDEs. `tests/flow.rs` enumera a tabela de transições inteira sem I/O. |
