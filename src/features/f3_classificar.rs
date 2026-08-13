@@ -157,6 +157,11 @@ pub fn verify(run: &mut Run) -> Outcome {
             "sem classificacao, para F4: {}",
             veredito.nao_classificados.join(", ")
         ));
+        run.risco(format!(
+            "{} campo(s) sem classificacao, encaminhados ao gate de F4: {}",
+            veredito.nao_classificados.len(),
+            veredito.nao_classificados.join(", ")
+        ));
     }
 
     relatorio_legivel(run, &laudo)

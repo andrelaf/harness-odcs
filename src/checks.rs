@@ -8,8 +8,12 @@
 use crate::config::Config;
 use crate::tools::ToolOutcome;
 use anyhow::Result;
+use serde::Serialize;
 
-#[derive(Debug, Clone)]
+/// `Serialize` porque `doctor --json` publica esta mesma estrutura. Um tipo de
+/// saida proprio para a versao JSON abriria espaco para o texto e o JSON
+/// discordarem sobre o resultado de uma checagem.
+#[derive(Debug, Clone, Serialize)]
 pub struct Check {
     pub name: String,
     pub ok: bool,

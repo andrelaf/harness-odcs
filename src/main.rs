@@ -37,6 +37,11 @@ struct Cli {
     /// Imprime a sequencia de transicoes sem executar nada.
     #[arg(long = "dry-run", global = true)]
     dry_run: bool,
+
+    /// Saida legivel por maquina, em stdout. Vale para `status`, `doctor` e
+    /// `metrics`; nos demais e recusada.
+    #[arg(long, global = true)]
+    json: bool,
 }
 
 #[derive(Subcommand)]
@@ -72,14 +77,25 @@ fn main() {
         }
     };
 
+    // `--json` so faz sentido onde a saida e um relatorio. Nos comandos que
+    // mutam estado a saida e narrativa de progresso, e serializa-la produziria
+    // um JSON que ninguem consome. Recusar em voz alta e melhor que aceitar e
+    // ignorar: flag silenciosamente sem efeito e a pior das tres opcoes.
+    if cli.json && !matches!(cli.cmd, Cmd::Status | Cmd::Doctor | Cmd::Metrics) {
+        eprintln!(
+            "--json vale para `status`, `doctor` e `metrics`; os demais comandos nao o aceitam"
+        );
+        std::process::exit(Exit::Usage.code());
+    }
+
     let result = match &cli.cmd {
         Cmd::Plan => cmd_plan(&cfg),
         Cmd::Next => cmd_next(&cfg, cli.step, cli.dry_run),
-        Cmd::Status => cmd_status(&cfg),
+        Cmd::Status => cmd_status(&cfg, cli.json),
         Cmd::Verify => cmd_single(&cfg, Phase::Verify),
         Cmd::Handoff => cmd_single(&cfg, Phase::Handoff),
-        Cmd::Doctor => cmd_doctor(&cfg),
-        Cmd::Metrics => cmd_metrics(&cfg),
+        Cmd::Doctor => cmd_doctor(&cfg, cli.json),
+        Cmd::Metrics => cmd_metrics(&cfg, cli.json),
         Cmd::Approve { feature } => cmd_approve(&cfg, feature),
         Cmd::Reset { feature } => cmd_reset(&cfg, feature),
     };
@@ -115,13 +131,33 @@ fn cmd_plan(cfg: &Config) -> Result<i32> {
     Ok(Exit::Pass.code())
 }
 
-fn cmd_status(cfg: &Config) -> Result<i32> {
+/// O estado, em JSON.
+///
+/// Reaproveita `Progress` e `Feature` em vez de declarar campos proprios: os
+/// dois ja sao a forma canonica do estado, e uma segunda representacao
+/// divergiria da primeira na primeira mudanca de schema.
+#[derive(serde::Serialize)]
+struct StatusJson<'a> {
+    progress: &'a Progress,
+    features: Vec<&'a state::Feature>,
+}
+
+fn cmd_status(cfg: &Config, json: bool) -> Result<i32> {
     let features = FeatureList::load_or_seed(&cfg.feature_list_path())?;
     let progress = Progress::load_or_default(&cfg.progress_path())?;
 
     if let Err(e) = state::validate(&features, &progress) {
         eprintln!("estado invalido: {e:#}");
         return Ok(Exit::BadState.code());
+    }
+
+    if json {
+        let saida = StatusJson {
+            progress: &progress,
+            features: features.ordered(),
+        };
+        println!("{}", serde_json::to_string_pretty(&saida)?);
+        return Ok(Exit::Pass.code());
     }
 
     println!("run_status : {:?}", progress.run_status);
@@ -164,13 +200,24 @@ fn cmd_status(cfg: &Config) -> Result<i32> {
     Ok(Exit::Pass.code())
 }
 
-fn cmd_doctor(cfg: &Config) -> Result<i32> {
+fn cmd_doctor(cfg: &Config, json: bool) -> Result<i32> {
     let evidence = cfg.evidence_dir().join("doctor");
     let mut exec =
         |label: &str, program: &str, args: &[&str]| tools::run(program, args, &evidence, label);
     let results = checks::environment(cfg, &mut exec);
+    let failed = results.iter().filter(|c| !c.ok).count();
 
-    let mut failed = 0;
+    if json {
+        println!("{}", serde_json::to_string_pretty(&results)?);
+        // O exit code continua sendo o veredito, com ou sem `--json`: quem
+        // consome em CI olha o codigo, nao conta itens.
+        return Ok(if failed == 0 {
+            Exit::Pass.code()
+        } else {
+            Exit::PhaseFail.code()
+        });
+    }
+
     for c in &results {
         println!(
             "{}  {:<22} {}",
@@ -178,9 +225,6 @@ fn cmd_doctor(cfg: &Config) -> Result<i32> {
             c.name,
             c.detail
         );
-        if !c.ok {
-            failed += 1;
-        }
     }
     if failed == 0 {
         Ok(Exit::Pass.code())
@@ -198,15 +242,39 @@ fn cmd_doctor(cfg: &Config) -> Result<i32> {
 /// A saida nao e um despejo de numeros: ela responde as duas perguntas que o
 /// brief cobra da medicao, "onde travou" e "onde saiu caro", porque numero sem
 /// leitura nao e medicao, e enfeite.
-fn cmd_metrics(cfg: &Config) -> Result<i32> {
+/// A medicao, em JSON: os runs e a leitura do conjunto no mesmo objeto.
+///
+/// O arquivo `metrics/metrics.jsonl` continua sendo uma linha por run, sem o
+/// resumo — ele e derivavel, e grava-lo criaria um numero que pode envelhecer
+/// em relacao as linhas ao lado.
+#[derive(serde::Serialize)]
+struct MetricsJson<'a> {
+    runs: &'a [metrics::MetricaDeRun],
+    resumo: metrics::Resumo,
+}
+
+fn cmd_metrics(cfg: &Config, json: bool) -> Result<i32> {
     let metricas = metrics::coletar(&cfg.trace_dir())?;
     if metricas.is_empty() {
-        println!("nenhum run em {} — nada a medir", cfg.trace_dir().display());
+        if json {
+            println!("{{\"runs\":[],\"resumo\":null}}");
+        } else {
+            println!("nenhum run em {} — nada a medir", cfg.trace_dir().display());
+        }
         return Ok(Exit::Pass.code());
     }
 
     let destino = cfg.metrics_path();
     metrics::gravar(&metricas, &destino)?;
+
+    if json {
+        let saida = MetricsJson {
+            runs: &metricas,
+            resumo: metrics::resumir(&metricas),
+        };
+        println!("{}", serde_json::to_string_pretty(&saida)?);
+        return Ok(Exit::Pass.code());
+    }
 
     println!(
         "{:<26} {:<16} {:<11} {:>4} {:>9} {:>9} {:>6}",
@@ -467,6 +535,8 @@ fn cmd_single(cfg: &Config, phase: Phase) -> Result<i32> {
         evidence_dir,
         tool_seq: 0,
         notes: Vec::new(),
+        resultados: Vec::new(),
+        riscos: Vec::new(),
     };
     run.progress.run_id = Some(run_id.clone());
 
@@ -483,10 +553,24 @@ fn cmd_single(cfg: &Config, phase: Phase) -> Result<i32> {
         },
     )?;
 
+    // `phase_start` também aqui: a spec (seção 6) diz "entrada em cada fase", e
+    // uma reexecução que emitisse só o `phase_end` deixaria um trace com um
+    // formato para o laço e outro para o comando avulso.
+    run.tracer.emit(
+        "phase_start",
+        Draft {
+            feature: Some(feature.id.clone()),
+            to: Some(phase.to_string()),
+            step: run.progress.step_count,
+            ..Default::default()
+        },
+    )?;
+
     let started = std::time::Instant::now();
     let outcome = phases::execute(phase, &mut run);
     let duration = started.elapsed().as_millis();
     let label = outcome_label(&outcome);
+    run.resultados.push(format!("{phase}={label}"));
 
     println!("  {:<10} {}", phase.as_str(), label);
     let notes = run.notes.join(" | ");
@@ -595,6 +679,8 @@ fn cmd_next(cfg: &Config, step_mode: bool, dry_run: bool) -> Result<i32> {
         evidence_dir,
         tool_seq: 0,
         notes: Vec::new(),
+        resultados: Vec::new(),
+        riscos: Vec::new(),
     };
 
     run.progress.run_id = Some(run_id.clone());
@@ -637,6 +723,11 @@ fn cmd_next(cfg: &Config, step_mode: bool, dry_run: bool) -> Result<i32> {
         run.progress.step_count = step_now;
 
         let label = outcome_label(&outcome);
+        // Antes do `handoff`, para que ele leve ao commit o resultado de todas
+        // as fases que o antecederam — `verify` inclusive, que e o que prova o
+        // trabalho.
+        run.resultados.push(format!("{phase}={label}"));
+
         println!("  {:<10} {}", phase.as_str(), label);
         let notes = run.notes.clone();
         for n in &notes {

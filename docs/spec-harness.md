@@ -1,6 +1,6 @@
 # Spec do Harness — contrato congelado
 
-> **Versão da spec:** 4 — ver [Mudanças](#12-mudanças)
+> **Versão da spec:** 5 — ver [Mudanças](#12-mudanças)
 > **Status:** congelada. Mudança aqui é decisão explícita, não efeito colateral de implementação.
 > **Escopo:** o harness. Nada do classificador. A spec de cada feature de domínio (F1–F4) é escrita na sessão da própria feature.
 
@@ -65,7 +65,7 @@ caminho para contornar o gate humano sem aprovação.
 |---|---|
 | `--step` | Avança **uma** transição em vez da feature inteira. |
 | `--dry-run` | Imprime a sequência de transições que seria executada e sai. Não toca disco. |
-| `--json` | Saída legível por máquina, em stdout. **Não implementado** — ver [Mudanças, v4](#12-mudanças). |
+| `--json` | Saída legível por máquina, em stdout. Vale para `status`, `doctor` e `metrics`; nos demais é recusada com exit `2`. |
 
 ### Exit codes
 
@@ -356,6 +356,22 @@ Ideias novas de qualquer natureza vão para `BACKLOG-FUTURO.md` — não entram 
 
 Registro das decisões que alteraram este contrato depois de congelado.
 
+### Versão 5 — 13/08/2026
+
+**`--json` implementado, e o escopo dele estreitado** (seção 2). A v4 registrou
+a flag como declarada e ausente; esta versão fecha a divergência.
+
+Vale para `status`, `doctor` e `metrics` — os três comandos cuja saída é um
+relatório. Nos demais é **recusada com exit `2`**, e essa é a decisão que
+merece registro: `next`, `approve` e `reset` produzem narrativa de progresso,
+não dado, e serializá-la geraria um JSON sem consumidor. Aceitar a flag e
+ignorá-la seria pior que as duas alternativas — flag silenciosamente sem efeito
+é a que engana.
+
+O JSON reaproveita `Progress`, `Feature` e `Check`, que já são as formas
+canônicas: uma estrutura de saída própria divergiria delas na primeira mudança
+de schema, e o texto e o JSON passariam a discordar sobre o mesmo estado.
+
 ### Versão 4 — 13/08/2026
 
 **Adicionado `metrics`** (seções 2 e 6). Não é mudança de comportamento do
@@ -367,12 +383,9 @@ Escopo estreito de propósito: o comando **só lê** `trace/` e escreve
 chamado por nenhuma fase. Instrumentar a medição dentro das fases criaria a
 segunda fonte de verdade que a seção 6 existe para evitar.
 
-**Registrado: `--json` está declarado e não implementado** (seção 2). Apareceu
+**Registrado: `--json` estava declarado e não implementado** (seção 2). Apareceu
 na conferência de fechamento, comparando a tabela de flags com o `Cli` de
-`main.rs`: só `--step` e `--dry-run` existem. É o mesmo tipo de divergência que
-a versão 2 corrigiu em `run_status`, e a correção honesta é a mesma — dizer, em
-vez de deixar a spec prometer o que o binário não entrega. Implementar é
-decisão para uma sessão própria, não efeito colateral do empacotamento.
+`main.rs`: só `--step` e `--dry-run` existiam. Resolvido na versão 5.
 
 ### Versão 3 — 13/08/2026
 

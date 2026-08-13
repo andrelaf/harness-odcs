@@ -188,7 +188,42 @@ pub fn verify(run: &mut Run) -> Outcome {
         return Outcome::Fail(e);
     }
 
+    // O que sobra depois do PASS. Campo sem classificacao nao reprova o fluxo,
+    // mas quem ler o commit daqui a seis meses precisa saber que ele passou
+    // sem classificacao — e por decisao de quem.
+    declarar_riscos(run, &c, aprovacao.map(|a| a.aprovado_em.clone()));
+
     aplicar_no_contrato(run, &c)
+}
+
+fn declarar_riscos(run: &mut Run, c: &Composicao, aprovado_em: Option<String>) {
+    let sem_classificacao: Vec<&str> = c
+        .proposta
+        .campos
+        .iter()
+        .filter(|x| matches!(x.mudanca, Mudanca::Lacuna | Mudanca::Conflito))
+        .map(|x| x.campo.as_str())
+        .collect();
+
+    if !sem_classificacao.is_empty() {
+        run.risco(format!(
+            "{} campo(s) persistido(s) sem classificacao: {}",
+            sem_classificacao.len(),
+            sem_classificacao.join(", ")
+        ));
+    }
+    if c.proposta.resumo.reclassificacoes > 0 {
+        run.risco(format!(
+            "{} campo(s) tiveram a classificacao anterior sobrescrita",
+            c.proposta.resumo.reclassificacoes
+        ));
+    }
+    if let Some(ts) = aprovado_em {
+        run.risco(format!(
+            "gate liberado por decisao humana em {ts} — pedido {}",
+            &c.proposta.gate_sha256[..16]
+        ));
+    }
 }
 
 // --- Montagem, com I/O --------------------------------------------------------

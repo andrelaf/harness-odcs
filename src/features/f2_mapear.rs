@@ -146,6 +146,11 @@ pub fn verify(run: &mut Run) -> Outcome {
             "lacuna(s) para F4: {}",
             veredito.lacunas.join(", ")
         ));
+        run.risco(format!(
+            "{} campo(s) sem termo no glossario: {}",
+            veredito.lacunas.len(),
+            veredito.lacunas.join(", ")
+        ));
     }
 
     relatorio_legivel(run, &mapeamento)

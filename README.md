@@ -315,7 +315,15 @@ Semana 4 de 4. As quatro features rodam de ponta a ponta, a medição é derivad
 | Medição: custo, duração, erros, resultado | `metrics/metrics.jsonl` · `./run.sh metrics` |
 | Recomendação: quando usar e quando não | [`docs/decisao.md`](docs/decisao.md) e a seção acima |
 
-**Divergência conhecida entre spec e código:** a tabela de flags globais promete `--json`, que não foi implementado — só `--step` e `--dry-run` existem. Registrada em [`docs/decisao.md`](docs/decisao.md) em vez de escondida.
+### Saída para máquina
+
+```bash
+./run.sh status --json     # progresso e lista de features
+./run.sh doctor --json     # PASS/FAIL por item de ambiente
+./run.sh metrics --json    # runs e resumo, sem abrir o arquivo
+```
+
+Vale para os três comandos cuja saída é relatório. Nos que mutam estado (`next`, `approve`, `reset`) a flag é **recusada com exit `2`** — a saída deles é narrativa de progresso, não dado, e uma flag silenciosamente sem efeito engana mais que uma recusa. O exit code continua sendo o veredito nos dois formatos.
 
 ## Estrutura do repositório
 

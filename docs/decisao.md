@@ -110,10 +110,12 @@ classificação continua sendo uma consulta a catálogo, sem heurística — mas
 precisou escrever ODCS de volta, e escrever é caro. Se houvesse uma quinta
 feature, eu cortaria escopo antes de escrever a primeira linha.
 
-**`--json` está na spec e não existe no código.** A tabela de flags globais
-promete saída legível por máquina; só `--step` e `--dry-run` foram
-implementados. É divergência entre contrato e implementação, do mesmo tipo que
-a versão 2 corrigiu em `run_status` — registrada aqui em vez de escondida.
+**A verificação externa depende de exit code e de arquivo, não de parser.**
+`--json` existe em `status`, `doctor` e `metrics`, e é recusado nos comandos que
+mutam estado. Quem integra o harness em CI lê o exit code — `0`, `1`, `3`, `5` —
+e, se precisar do conteúdo, os arquivos em `state/` e `metrics/` já são JSON.
+A flag é conveniência de pipe, não capacidade nova, e vale saber disso antes de
+construir automação em cima dela.
 
 ## O que eu faria diferente
 

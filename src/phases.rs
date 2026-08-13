@@ -24,6 +24,19 @@ pub struct Run {
     pub tool_seq: u32,
     /// Linhas para o operador, impressas pela fase corrente.
     pub notes: Vec<String>,
+    /// `fase=RESULTADO` de cada fase ja concluida neste run. Preenchido pelo
+    /// laco, e nao pelas fases: quem sabe o desfecho e quem o julga.
+    ///
+    /// E o registro de verificacao que o handoff leva para o commit — em
+    /// particular o resultado de `verify`, que e o que prova o trabalho.
+    pub resultados: Vec<String>,
+    /// O que a feature quer que fique registrado como risco remanescente.
+    ///
+    /// Diferente de `notes`: notas sao do momento e somem no fim da fase;
+    /// risco atravessa o run e entra no commit. Um campo classificado como
+    /// lacuna nao reprova o fluxo, mas quem ler o commit daqui a seis meses
+    /// precisa saber que ele passou sem classificacao.
+    pub riscos: Vec<String>,
 }
 
 impl Run {
@@ -78,6 +91,12 @@ impl Run {
 
     pub fn note(&mut self, s: impl Into<String>) {
         self.notes.push(s.into());
+    }
+
+    /// Declara um risco remanescente. Sobrevive ao fim da fase e vai para o
+    /// corpo do commit de `handoff`.
+    pub fn risco(&mut self, s: impl Into<String>) {
+        self.riscos.push(s.into());
     }
 }
 
@@ -309,9 +328,26 @@ fn handoff(run: &mut Run) -> Outcome {
     if staged.is_empty() {
         run.note("nada novo para commitar".to_string());
     } else {
+        // O corpo do commit e o handoff que o brief pede: resumo, verificacao
+        // e riscos. Sem eles o historico registraria que algo aconteceu, mas
+        // nao se passou nem o que ficou pendente — e o commit e onde a proxima
+        // pessoa comeca a ler.
         let subject = format!("harness: handoff {id}");
+        let verificacao = if run.resultados.is_empty() {
+            // Acontece em `./run.sh handoff` avulso, fora do laco: nao houve
+            // fase julgada neste run, e dizer isso e melhor que omitir.
+            "fases: nenhuma julgada neste run (handoff avulso)".to_string()
+        } else {
+            format!("fases: {}", run.resultados.join(" "))
+        };
+        let riscos = if run.riscos.is_empty() {
+            "riscos: nenhum declarado pela feature".to_string()
+        } else {
+            format!("riscos:\n  - {}", run.riscos.join("\n  - "))
+        };
         let body = format!(
-            "run_id: {}\npassos: {}/{}\nfases: start..handoff\nartefatos: state/, trace/, evidence/",
+            "run_id: {}\npassos: {}/{}\n{verificacao}\n{riscos}\n\
+             artefatos: state/, trace/, evidence/, contracts/",
             run.tracer.run_id(),
             run.progress.step_count,
             run.progress.max_steps
