@@ -65,7 +65,7 @@ caminho para contornar o gate humano sem aprovação.
 |---|---|
 | `--step` | Avança **uma** transição em vez da feature inteira. |
 | `--dry-run` | Imprime a sequência de transições que seria executada e sai. Não toca disco. |
-| `--json` | Saída legível por máquina, em stdout. |
+| `--json` | Saída legível por máquina, em stdout. **Não implementado** — ver [Mudanças, v4](#12-mudanças). |
 
 ### Exit codes
 
@@ -366,6 +366,13 @@ Escopo estreito de propósito: o comando **só lê** `trace/` e escreve
 `metrics/metrics.jsonl`. Não toca em `state/`, não participa do fluxo e não é
 chamado por nenhuma fase. Instrumentar a medição dentro das fases criaria a
 segunda fonte de verdade que a seção 6 existe para evitar.
+
+**Registrado: `--json` está declarado e não implementado** (seção 2). Apareceu
+na conferência de fechamento, comparando a tabela de flags com o `Cli` de
+`main.rs`: só `--step` e `--dry-run` existem. É o mesmo tipo de divergência que
+a versão 2 corrigiu em `run_status`, e a correção honesta é a mesma — dizer, em
+vez de deixar a spec prometer o que o binário não entrega. Implementar é
+decisão para uma sessão própria, não efeito colateral do empacotamento.
 
 ### Versão 3 — 13/08/2026
 

@@ -1,0 +1,5 @@
+# comando: git log -1 --format=%h %s
+# --- stdout ---
+a29c76c feat: medicao derivada do trace (`run.sh metrics`)
+
+# --- stderr ---

@@ -2,7 +2,7 @@
 
 Harness de desenvolvimento incremental que conduz a **classificação de privacidade de contratos de dados ODCS** — com teto de passos, rastro auditável e ponto de controle humano.
 
-> **Estado: Semana 1, em construção.** Este README descreve a arquitetura alvo. O que já existe está marcado em [Estado atual](#estado-atual).
+> **Estado: completo.** As quatro features atravessam o fluxo de ponta a ponta, com medição derivada do trace. Detalhe por item em [Estado atual](#estado-atual); a leitura de onde isto se paga — e onde não — em [`docs/decisao.md`](docs/decisao.md).
 
 ---
 
@@ -20,7 +20,7 @@ Jogar um LLM no problema resolve a velocidade e piora tudo o mais: ele esquece c
 
 ### Onde isso se paga (e onde não)
 
-Se paga quando há **volume de contratos e exigência de compliance**: o custo fixo do harness dilui, e o rastro é o produto. Não se paga para **um contrato único e trivial** — revisar 8 campos na mão é mais rápido do que operar qualquer máquina. Esta leitura é parte da entrega, não uma ressalva.
+Se paga quando há **volume de contratos e exigência de compliance**: o custo fixo do harness dilui, e o rastro é o produto. Não se paga para **um contrato único e trivial** — revisar 9 campos na mão leva 15 minutos, e isto custou 4 semanas. Esta leitura é parte da entrega, não uma ressalva; a versão completa, com os números e os limites, está em [`docs/decisao.md`](docs/decisao.md).
 
 ---
 
@@ -144,15 +144,15 @@ Nada foi escrito no contrato. Quem decide lê o pedido e libera:
 
 Deriva custo, duração, erros e resultado **de `trace/`** e regenera `metrics/metrics.jsonl`. Não há contador paralelo: `duration_ms` e `exit_code` estão no trace desde o primeiro dia justamente para que a métrica nascesse daqui. Apagar `metrics/` não perde nada.
 
-### A leitura honesta — 12 runs
+### A leitura honesta — 13 runs
 
 | | |
 |---|---|
-| Runs | 12 — 9 `PASS`, 3 `HALT` |
-| Duração somada | 69,8 s |
-| Em ferramenta externa | 69,6 s — **99,6%**, em 132 invocações |
+| Runs | 13 — 9 `PASS`, 4 `HALT` |
+| Duração somada | 73,5 s |
+| Em ferramenta externa | 73,2 s — **99,6%**, em 139 invocações |
 | Fase mais cara | `smoke` (17,2 s somados) |
-| Erros | 1 fase reprovada · 1 bloqueio · 2 abortos |
+| Erros | 1 fase reprovada · 2 bloqueios · 2 abortos |
 
 **Onde saiu caro: em lugar nenhum que o harness controle.** 99,6% do tempo é espera de processo externo — `docker run` do `datacontract-cli`, a ~600 ms de partida por invocação. A máquina de estados, o trace, a leitura do glossário e a classificação inteira somam os 0,4% restantes. Duas consequências que valem mais que o número:
 
@@ -168,8 +168,11 @@ Não há custo de token: nenhum modelo roda dentro do fluxo. A classificação �
 | `…033351Z-ad8cec` | teto de 4 passos atingido em `smoke` | `3` |
 | `…041954Z-a69d54` | `FAIL` em `verify` — `logicalType` inválido no contrato | `1` |
 | `…031348Z-11391c` | bloqueado em `implement` — 2 lacunas aguardando decisão humana | `5` |
+| `…033311Z-ed5ef8` | bloqueado em `implement` — reclassificação de `data_cadastro` | `5` |
 
 O teto de passos não é demonstrável só em teste: **está no registro**. O run `ad8cec` rodou com `max_steps: 4` e abortou em `smoke`, como a tabela de decisão manda — e é por isso que o teto mora em `progress.json`, ajustável sem recompilar.
+
+O último run é o ensaio da demo, e vale por um motivo específico: o catálogo baixou `cadastro.data_criacao` de `internal` para `confidential`, o gate abriu com hash `4ada9f54`, e a aprovação anterior — `4f773bab`, das duas lacunas — **não liberou nada**. A aprovação vale para um conteúdo, e isso está no registro, não só no teste.
 
 Limites do que está medido, ditos em voz alta: a duração é a **soma das fases**, não relógio de parede — fica de fora a escrita de estado entre fases, sub-milissegundo. E `erros` conta fase reprovada, nunca exit code diferente de zero: o fluxo pergunta ao git se uma branch existe, e o exit `1` dessa sondagem é a resposta "não existe", não uma falha. As duas contagens são campos separados no `metrics.jsonl`.
 
@@ -266,22 +269,53 @@ Herdadas de [`docs/contexto.md`](docs/contexto.md) e válidas para todo o códig
 
 ---
 
+## Quando usar, e quando não
+
+A leitura completa está em [`docs/decisao.md`](docs/decisao.md). O resumo:
+
+| | |
+|---|---|
+| **Use** | Volume de contratos · rastreabilidade é requisito · o vocabulário tem dono |
+| **Não use** | Um contrato único e trivial · domínio sem vocabulário estável · ninguém responde pelo glossário |
+
+A pergunta que separa os dois casos não é *"quantos contratos você tem?"* — é **"alguém vai ter que provar, depois, por que este campo foi classificado assim?"**. Se a resposta for não, este harness é caro demais, e um checklist no template do PR resolve melhor.
+
+Três limites que valem saber antes de adotar: **22% dos campos** saíram como lacuna no primeiro contrato real (a cobertura é do glossário, não da ferramenta); propriedades ODCS aninhadas não foram exercitadas; e a reescrita do contrato perde comentários do YAML.
+
+---
+
 ## Estado atual
 
-Semana 1 de 4. O objetivo é o esqueleto rodando **uma** feature de ponta a ponta com o primeiro trace.
+Semana 4 de 4. As quatro features rodam de ponta a ponta, a medição é derivada do trace e o pacote de entrega está fechado.
 
 | Item | Estado |
 |---|---|
 | `docs/brief.md` — plano das 4 semanas | pronto |
 | `docs/contexto.md` — mapa de restrições | pronto |
-| `docs/spec-harness.md` — contrato congelado do harness | pronto |
-| `run.sh`, `flow.rs`, `state/`, `trace/`, `scripts/` | **em construção** |
+| `docs/spec-harness.md` — contrato congelado do harness (v4) | pronto |
+| `run.sh`, `flow.rs`, `state/`, `trace/`, `scripts/` | pronto · 82 testes |
 | F1 · Validar — [spec](docs/spec-f1-validar.md) | pronta · lint ODCS + relatório HTML |
 | F2 · Mapear — [spec](docs/spec-f2-mapear.md) | pronta · glossário canônico, cobertura de decisão |
 | F3 · Classificar — [spec](docs/spec-f3-classificar.md) | pronta · catálogo LGPD em campos ODCS |
 | F4 · Gate + relatório — [spec](docs/spec-f4-gate.md) | pronta · contrato enriquecido, lacunas e pausa humana |
 | Medição (custo, duração, erros) | pronta · `./run.sh metrics`, derivada do trace |
-| README de decisão + demo | Semana 4 |
+| [`docs/decisao.md`](docs/decisao.md) — onde se paga e onde perde | pronto |
+| [`docs/demo.md`](docs/demo.md) — roteiro ensaiado, 10 min | pronto |
+
+### Pacote mínimo — onde cada item está
+
+| Item | Onde |
+|---|---|
+| README: problema, restrições, arquitetura, como executar | este arquivo |
+| Ponto de entrada estável | [`run.sh`](run.sh) — único, sem alternativa documentada |
+| Estado e backlog persistidos | `state/feature-list.json`, `state/progress.json` |
+| Smoke test e verificação com PASS/FAIL explícito | fases `smoke` e `verify`; `./run.sh doctor` usa o mesmo código |
+| Handoff por feature: commit, resumo, testes, riscos | fase `handoff` + histórico do Git |
+| Trace da trajetória | `trace/<run_id>.jsonl`, append-only |
+| Medição: custo, duração, erros, resultado | `metrics/metrics.jsonl` · `./run.sh metrics` |
+| Recomendação: quando usar e quando não | [`docs/decisao.md`](docs/decisao.md) e a seção acima |
+
+**Divergência conhecida entre spec e código:** a tabela de flags globais promete `--json`, que não foi implementado — só `--step` e `--dry-run` existem. Registrada em [`docs/decisao.md`](docs/decisao.md) em vez de escondida.
 
 ## Estrutura do repositório
 
@@ -297,5 +331,5 @@ state/                    feature-list.json, progress.json, gate-pendente.json, 
 trace/                    <run_id>.jsonl, append-only
 metrics/                  metrics.jsonl — derivado de trace/, regenerável
 evidence/                 saída bruta das ferramentas, por run
-docs/                     brief, contexto, spec
+docs/                     brief, contexto, specs, decisão e roteiro de demo
 ```
