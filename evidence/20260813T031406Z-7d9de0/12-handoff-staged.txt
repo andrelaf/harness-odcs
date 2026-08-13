@@ -1,0 +1,39 @@
+# comando: git diff --cached --name-only
+# --- stdout ---
+contracts/clientes/contract.odcs.yaml
+evidence/20260813T031348Z-11391c/01-bearings-branch.txt
+evidence/20260813T031348Z-11391c/02-bearings-head.txt
+evidence/20260813T031348Z-11391c/03-smoke-engine.txt
+evidence/20260813T031348Z-11391c/04-smoke-imagem.txt
+evidence/20260813T031348Z-11391c/05-smoke-git.txt
+evidence/20260813T031348Z-11391c/06-pick-branch.txt
+evidence/20260813T031348Z-11391c/07-pick-branch-existe.txt
+evidence/20260813T031348Z-11391c/08-pick-checkout.txt
+evidence/20260813T031348Z-11391c/09-implement-campos.txt
+evidence/20260813T031348Z-11391c/f4-campos-implement.json
+evidence/20260813T031348Z-11391c/f4-contrato-enriquecido.odcs.yaml
+evidence/20260813T031348Z-11391c/f4-proposta.json
+evidence/20260813T031406Z-7d9de0/01-bearings-branch.txt
+evidence/20260813T031406Z-7d9de0/02-bearings-head.txt
+evidence/20260813T031406Z-7d9de0/03-smoke-engine.txt
+evidence/20260813T031406Z-7d9de0/04-smoke-imagem.txt
+evidence/20260813T031406Z-7d9de0/05-smoke-git.txt
+evidence/20260813T031406Z-7d9de0/06-pick-branch.txt
+evidence/20260813T031406Z-7d9de0/07-implement-campos.txt
+evidence/20260813T031406Z-7d9de0/08-verify-campos.txt
+evidence/20260813T031406Z-7d9de0/09-verify-lint-enriquecido.txt
+evidence/20260813T031406Z-7d9de0/10-handoff-branch.txt
+evidence/20260813T031406Z-7d9de0/f4-campos-implement.json
+evidence/20260813T031406Z-7d9de0/f4-campos-verify.json
+evidence/20260813T031406Z-7d9de0/f4-contrato-enriquecido.odcs.yaml
+evidence/20260813T031406Z-7d9de0/f4-lint-enriquecido.json
+evidence/20260813T031406Z-7d9de0/f4-proposta.json
+evidence/20260813T031406Z-7d9de0/f4-relatorio.md
+evidence/20260813T031406Z-7d9de0/f4-veredito.json
+state/aprovacoes.json
+state/feature-list.json
+state/progress.json
+trace/20260813T031348Z-11391c.jsonl
+trace/20260813T031406Z-7d9de0.jsonl
+
+# --- stderr ---

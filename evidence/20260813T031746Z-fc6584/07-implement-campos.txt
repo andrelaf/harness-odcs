@@ -1,0 +1,5 @@
+# comando: docker run --rm -v C:/repos/harness-odcs:/home/datacontract datacontract/cli:1.1.0 export jsonschema contracts/clientes/contract.odcs.yaml --output evidence/20260813T031746Z-fc6584/f4-campos-implement.json
+# --- stdout ---
+Written result to evidence/20260813T031746Z-fc6584/f4-campos-implement.json
+
+# --- stderr ---
