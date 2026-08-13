@@ -1,0 +1,165 @@
+{
+  "contrato": "contracts/clientes/contract.odcs.yaml",
+  "contrato_sha256": "19121d7f9d6672a770ddcb8050d596c2af1e64a54e747d06a3b73c09b74b4db1",
+  "glossario_versao": "1.0.0",
+  "catalogo_versao": "1.0.0",
+  "resumo": {
+    "campos": 9,
+    "classificados": 7,
+    "primeira_classificacao": 7,
+    "inalterados": 0,
+    "lacunas": 2,
+    "reclassificacoes": 0,
+    "conflitos": 0
+  },
+  "gate_sha256": "4f773bab5f6e400f16bd5fdcabd11dab437c929f3d03f03736433be527779e78",
+  "gate": [
+    {
+      "tipo": "lacuna",
+      "campo": "segmento",
+      "detalhe": "campo sem termo no glossario — segue sem classificacao no contrato ate decisao humana"
+    },
+    {
+      "tipo": "lacuna",
+      "campo": "valor_total_compras",
+      "detalhe": "campo sem termo no glossario — segue sem classificacao no contrato ate decisao humana"
+    }
+  ],
+  "campos": [
+    {
+      "campo": "cep",
+      "termo": "endereco.cep",
+      "mudanca": "primeira_classificacao",
+      "proposto": {
+        "classification": "confidential",
+        "pii": true,
+        "sensivel": false
+      },
+      "declarado": {
+        "classification": null,
+        "pii": null,
+        "sensivel": null
+      }
+    },
+    {
+      "campo": "cpf",
+      "termo": "pessoa.cpf",
+      "mudanca": "primeira_classificacao",
+      "proposto": {
+        "classification": "restricted",
+        "pii": true,
+        "sensivel": false
+      },
+      "declarado": {
+        "classification": null,
+        "pii": null,
+        "sensivel": null
+      }
+    },
+    {
+      "campo": "data_cadastro",
+      "termo": "cadastro.data_criacao",
+      "mudanca": "primeira_classificacao",
+      "proposto": {
+        "classification": "internal",
+        "pii": false,
+        "sensivel": false
+      },
+      "declarado": {
+        "classification": null,
+        "pii": null,
+        "sensivel": null
+      }
+    },
+    {
+      "campo": "data_nascimento",
+      "termo": "pessoa.data_nascimento",
+      "mudanca": "primeira_classificacao",
+      "proposto": {
+        "classification": "confidential",
+        "pii": true,
+        "sensivel": false
+      },
+      "declarado": {
+        "classification": null,
+        "pii": null,
+        "sensivel": null
+      }
+    },
+    {
+      "campo": "email",
+      "termo": "contato.email",
+      "mudanca": "primeira_classificacao",
+      "proposto": {
+        "classification": "confidential",
+        "pii": true,
+        "sensivel": false
+      },
+      "declarado": {
+        "classification": null,
+        "pii": null,
+        "sensivel": null
+      }
+    },
+    {
+      "campo": "id_cliente",
+      "termo": "pessoa.identificador_interno",
+      "mudanca": "primeira_classificacao",
+      "proposto": {
+        "classification": "confidential",
+        "pii": true,
+        "sensivel": false
+      },
+      "declarado": {
+        "classification": null,
+        "pii": null,
+        "sensivel": null
+      }
+    },
+    {
+      "campo": "nome_completo",
+      "termo": "pessoa.nome_completo",
+      "mudanca": "primeira_classificacao",
+      "proposto": {
+        "classification": "confidential",
+        "pii": true,
+        "sensivel": false
+      },
+      "declarado": {
+        "classification": null,
+        "pii": null,
+        "sensivel": null
+      }
+    },
+    {
+      "campo": "segmento",
+      "termo": null,
+      "mudanca": "lacuna",
+      "proposto": {
+        "classification": null,
+        "pii": null,
+        "sensivel": null
+      },
+      "declarado": {
+        "classification": null,
+        "pii": null,
+        "sensivel": null
+      }
+    },
+    {
+      "campo": "valor_total_compras",
+      "termo": null,
+      "mudanca": "lacuna",
+      "proposto": {
+        "classification": null,
+        "pii": null,
+        "sensivel": null
+      },
+      "declarado": {
+        "classification": null,
+        "pii": null,
+        "sensivel": null
+      }
+    }
+  ]
+}

@@ -1,0 +1,30 @@
+{
+  "aprovado": true,
+  "conferido_contra_implement": true,
+  "glossario_versao": "1.0.0",
+  "catalogo_versao": "1.0.0",
+  "resumo": {
+    "campos": 9,
+    "classificados": 7,
+    "primeira_classificacao": 7,
+    "inalterados": 0,
+    "lacunas": 2,
+    "reclassificacoes": 0,
+    "conflitos": 0
+  },
+  "gate_sha256": "4f773bab5f6e400f16bd5fdcabd11dab437c929f3d03f03736433be527779e78",
+  "gate": [
+    {
+      "tipo": "lacuna",
+      "campo": "segmento",
+      "detalhe": "campo sem termo no glossario — segue sem classificacao no contrato ate decisao humana"
+    },
+    {
+      "tipo": "lacuna",
+      "campo": "valor_total_compras",
+      "detalhe": "campo sem termo no glossario — segue sem classificacao no contrato ate decisao humana"
+    }
+  ],
+  "aprovado_em": "2026-08-13T03:14:02.284265Z",
+  "defeitos": []
+}

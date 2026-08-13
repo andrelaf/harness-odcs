@@ -1,0 +1,12 @@
+{
+  "schema_version": 1,
+  "aprovacoes": [
+    {
+      "feature": "f4-gate",
+      "gate_sha256": "4f773bab5f6e400f16bd5fdcabd11dab437c929f3d03f03736433be527779e78",
+      "aprovado_em": "2026-08-13T03:14:02.284265Z",
+      "run_id": "20260813T031348Z-11391c",
+      "resumo": "2 lacuna(s), 0 reclassificacao(oes), 0 conflito(s)"
+    }
+  ]
+}
