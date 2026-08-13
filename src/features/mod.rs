@@ -19,6 +19,7 @@ pub mod contrato;
 pub mod f1_validar;
 pub mod f2_mapear;
 pub mod f3_classificar;
+pub mod f4_gate;
 
 use crate::flow::{Outcome, Phase};
 use crate::phases::Run;
@@ -33,6 +34,8 @@ pub fn dispatch(run: &mut Run, phase: Phase) -> Option<Outcome> {
         ("f2-mapear", Phase::Verify) => Some(f2_mapear::verify(run)),
         ("f3-classificar", Phase::Implement) => Some(f3_classificar::implement(run)),
         ("f3-classificar", Phase::Verify) => Some(f3_classificar::verify(run)),
+        ("f4-gate", Phase::Implement) => Some(f4_gate::implement(run)),
+        ("f4-gate", Phase::Verify) => Some(f4_gate::verify(run)),
         _ => None,
     }
 }

@@ -278,11 +278,20 @@ fn handoff(run: &mut Run) -> Outcome {
     // Escopo explicito: o handoff commita os artefatos do harness, nao a
     // arvore inteira. Nada de varrer trabalho nao relacionado para dentro.
     //
+    // `contracts` entra na lista porque o contrato enriquecido e o entregavel
+    // do projeto, e F4 o escreve ali depois do veredito. Deixa-lo de fora faria
+    // o commit registrar a decisao em `evidence/` e nao o efeito dela — e o
+    // diff do contrato e justamente o que vai para revisao humana.
+    //
     // O que o commit nao alcanca: a evidencia das proprias chamadas de git
     // abaixo e as ultimas linhas do trace, que so existem depois dele. Um
     // commit nao contem o registro da sua propria criacao — essas linhas
     // entram no run seguinte.
-    match run.tool("handoff-add", "git", &["add", "state", "trace", "evidence"]) {
+    match run.tool(
+        "handoff-add",
+        "git",
+        &["add", "state", "trace", "evidence", "contracts"],
+    ) {
         Ok(o) if o.ok() => {}
         Ok(o) => return Outcome::Fail(format!("git add saiu com {}", o.exit_code)),
         Err(e) => return Outcome::Fail(format!("{e}")),

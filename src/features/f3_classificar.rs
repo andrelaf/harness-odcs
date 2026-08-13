@@ -39,8 +39,8 @@ const CATALOGO: &str = "classification/catalogo-lgpd.yaml";
 
 /// Classifica e grava a proposta.
 pub fn implement(run: &mut Run) -> Outcome {
-    let laudo = match compor(run, "implement") {
-        Ok(l) => l,
+    let laudo = match laudo_atual(run, "f3", "implement") {
+        Ok(c) => c.laudo,
         Err(e) => return Outcome::Fail(e),
     };
 
@@ -173,11 +173,27 @@ fn relatorio_legivel(run: &mut Run, l: &Laudo) -> Outcome {
 
 // --- Montagem, com I/O --------------------------------------------------------
 
-fn compor(run: &mut Run, fase: &str) -> Result<Laudo, String> {
+/// A classificacao recomputada, com as duas entradas que julga-la exige.
+///
+/// Um struct e nao uma tupla porque quem chama e F4, de outro arquivo: `.laudo`
+/// e `.catalogo` se leem sozinhos, `.0` e `.2` nao.
+pub struct Classificacao {
+    pub laudo: Laudo,
+    pub catalogo: Catalogo,
+    /// Devolvido junto para que F4 nao precise reextrair os campos do contrato
+    /// — seria uma segunda chamada ao container por fase, pelo mesmo resultado.
+    pub mapeamento: Mapeamento,
+}
+
+/// Contrato + glossario + catalogo -> classificacao. As duas fases de F3 passam
+/// por aqui, e F4 tambem: e assim que o enriquecimento chega a decisao do
+/// catalogo sem depender da evidencia de um run anterior. Mesmo papel que
+/// `f2_mapear::mapeamento_atual` cumpre para F3.
+pub fn laudo_atual(run: &mut Run, feature: &str, fase: &str) -> Result<Classificacao, String> {
     // Recomputa o mapeamento em vez de ler `evidence/` de um run anterior:
     // assim as garantias de F2 valem dentro de F3, e a cadeia
     // contrato -> termo -> classificacao e reconstruida inteira a cada run.
-    let mapeamento = f2_mapear::mapeamento_atual(run, "f3", fase)?;
+    let mapeamento = f2_mapear::mapeamento_atual(run, feature, fase)?;
     let (glossario, _) = f2_mapear::glossario_do_disco(run)?;
     let (catalogo, cat_sha) = catalogo_do_disco(run)?;
 
@@ -198,7 +214,12 @@ fn compor(run: &mut Run, fase: &str) -> Result<Laudo, String> {
         catalogo.classificacoes.len(),
         &cat_sha[..16]
     ));
-    Ok(classificar(&mapeamento, &catalogo, &cat_sha))
+    let laudo = classificar(&mapeamento, &catalogo, &cat_sha);
+    Ok(Classificacao {
+        laudo,
+        catalogo,
+        mapeamento,
+    })
 }
 
 fn catalogo_do_disco(run: &Run) -> Result<(Catalogo, String), String> {

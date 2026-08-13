@@ -55,4 +55,15 @@ impl Config {
     pub fn progress_path(&self) -> PathBuf {
         self.state_dir().join("progress.json")
     }
+
+    /// O pedido de gate aberto, quando ha um. E o unico arquivo de estado que
+    /// nasce e morre dentro de um ciclo: a feature o cria ao bloquear,
+    /// `approve` o consome.
+    pub fn gate_pendente_path(&self) -> PathBuf {
+        self.state_dir().join("gate-pendente.json")
+    }
+
+    pub fn aprovacoes_path(&self) -> PathBuf {
+        self.state_dir().join("aprovacoes.json")
+    }
 }

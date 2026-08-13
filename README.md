@@ -111,6 +111,29 @@ Um `FAIL` **para** no passo em que ocorreu. Não tenta a próxima fase, não con
 
 `next` é o verbo principal: escolhe a primeira feature pendente e a atravessa pelo fluxo inteiro, gravando cada transição. Você não chama fases à mão — quem decide o próximo passo é a máquina de estados. Para depurar, `--step` avança uma transição por vez e `--dry-run` mostra a sequência sem executar.
 
+### O ponto de controle humano
+
+Quando F4 encontra algo que o harness não tem autoridade para resolver — um campo que o glossário não cobre, ou uma classificação que contraria o que o contrato já declara —, o fluxo **para**:
+
+```
+$ ./run.sh next
+  implement  BLOCKED
+               gate — [lacuna] segmento — campo sem termo no glossario …
+             pedido 4f773bab5f6e400f registrado em state/gate-pendente.json
+bloqueado em `implement` aguardando decisao humana: 2 lacuna(s), …
+$ echo $?
+5
+```
+
+Nada foi escrito no contrato. Quem decide lê o pedido e libera:
+
+```bash
+./run.sh approve f4-gate    # arquiva a decisão em state/aprovacoes.json
+./run.sh next               # agora atravessa e escreve o contrato enriquecido
+```
+
+**A aprovação vale para aquele conteúdo, não para a feature.** Ela é gravada pelo hash dos itens submetidos: se o contrato, o glossário ou o catálogo mudarem, o pedido é outro, o hash é outro e o gate fecha de novo. Sem isso, aprovar uma lacuna hoje liberaria em silêncio a despromoção de um campo PII amanhã.
+
 ---
 
 ## Editor de contratos ODCS
@@ -217,7 +240,7 @@ Semana 1 de 4. O objetivo é o esqueleto rodando **uma** feature de ponta a pont
 | F1 · Validar — [spec](docs/spec-f1-validar.md) | pronta · lint ODCS + relatório HTML |
 | F2 · Mapear — [spec](docs/spec-f2-mapear.md) | pronta · glossário canônico, cobertura de decisão |
 | F3 · Classificar — [spec](docs/spec-f3-classificar.md) | pronta · catálogo LGPD em campos ODCS |
-| F4 · Gate + relatório | Semana 3 |
+| F4 · Gate + relatório — [spec](docs/spec-f4-gate.md) | pronta · contrato enriquecido, lacunas e pausa humana |
 | Medição (custo, duração, erros) | Semana 3 |
 | README de decisão + demo | Semana 4 |
 
@@ -228,10 +251,10 @@ run.sh                    ponto de entrada único
 scripts/                  despachantes de ambiente (bootstrap, doctor, editor, ci)
 src/                      o harness em Rust — fluxo, estado, trace, fases
 tests/                    tabela de transições: ordem, teto, halt
-contracts/<nome>/         um diretório por contrato — só fonte, nada gerado
+contracts/<nome>/         um diretório por contrato — fonte, e destino do enriquecimento aprovado
 glossary/                 o glossário canônico contra o qual os campos são lidos
 classification/           o catálogo LGPD, chaveado por termo do glossário
-state/                    feature-list.json, progress.json
+state/                    feature-list.json, progress.json, gate-pendente.json, aprovacoes.json
 trace/                    <run_id>.jsonl, append-only
 evidence/                 saída bruta das ferramentas, por run
 docs/                     brief, contexto, spec

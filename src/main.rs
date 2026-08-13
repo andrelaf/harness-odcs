@@ -4,16 +4,19 @@
 //! fluxo mora aqui — ela esta em `flow.rs`. Nenhuma regra mora no `run.sh`,
 //! que so despacha para este binario.
 
-use anyhow::Result;
+use anyhow::{Context, Result};
 use clap::{Parser, Subcommand};
 use harness::checks;
 use harness::config::Config;
 use harness::exit::Exit;
 use harness::flow::{self, HaltReason, Outcome, Phase, Transition};
 use harness::phases::{self, Run};
-use harness::state::{self, FeatureList, FeatureStatus, Progress, RunStatus};
+use harness::state::{
+    self, Aprovacao, Aprovacoes, FeatureList, FeatureStatus, GatePendente, Progress, RunStatus,
+};
 use harness::tools;
 use harness::trace::{self, Draft, Tracer};
+use std::fs;
 use std::path::Path;
 
 #[derive(Parser)]
@@ -183,6 +186,17 @@ fn cmd_doctor(cfg: &Config) -> Result<i32> {
     }
 }
 
+/// Libera uma feature bloqueada e arquiva o pedido de gate que a bloqueou.
+///
+/// O comando continua burro: nao recomputa classificacao nenhuma, so consome o
+/// pedido que a feature deixou em `state/gate-pendente.json` e o registra em
+/// `state/aprovacoes.json` com data e run. Toda a politica de o que exige gate
+/// vive na feature, em Rust.
+///
+/// A aprovacao e gravada **pelo hash do pedido**, nao pelo nome da feature: ela
+/// vale para aquele conjunto de itens. Mudou o contrato, o glossario ou o
+/// catalogo, o hash muda e o gate fecha de novo — sem isso, aprovar uma lacuna
+/// hoje liberaria em silencio uma despromocao de campo PII amanha.
 fn cmd_approve(cfg: &Config, feature_id: &str) -> Result<i32> {
     let fl_path = cfg.feature_list_path();
     let pr_path = cfg.progress_path();
@@ -202,6 +216,49 @@ fn cmd_approve(cfg: &Config, feature_id: &str) -> Result<i32> {
             return Ok(Exit::Usage.code());
         }
         Some(_) => {}
+    }
+
+    let gate_path = cfg.gate_pendente_path();
+    let pendente = GatePendente::load_if_exists(&gate_path)?;
+
+    // Pedido de outra feature nao e liberado por engano: quem bloqueou tem de
+    // ser quem esta sendo aprovado.
+    if let Some(p) = &pendente
+        && p.feature != feature_id
+    {
+        eprintln!(
+            "o pedido de gate pendente e da feature `{}`, nao de `{feature_id}`",
+            p.feature
+        );
+        return Ok(Exit::Usage.code());
+    }
+
+    if let Some(p) = &pendente {
+        println!("pedido {} — {}", &p.gate_sha256[..16], p.resumo);
+        for item in &p.itens {
+            println!("  {item}");
+        }
+
+        let mut livro = Aprovacoes::load_or_default(&cfg.aprovacoes_path())?;
+        livro.aprovacoes.push(Aprovacao {
+            feature: p.feature.clone(),
+            gate_sha256: p.gate_sha256.clone(),
+            aprovado_em: trace::now_rfc3339(),
+            run_id: p.run_id.clone(),
+            resumo: p.resumo.clone(),
+        });
+        livro.save(&cfg.aprovacoes_path())?;
+
+        // O pedido some depois de arquivado: um pedido pendente que sobrevive a
+        // propria aprovacao seria aprovado duas vezes na proxima vez.
+        fs::remove_file(&gate_path)
+            .with_context(|| format!("removendo {}", gate_path.display()))?;
+        println!(
+            "aprovacao registrada em {}",
+            cfg.aprovacoes_path().display()
+        );
+    } else {
+        println!("nenhum pedido de gate pendente — liberando apenas o estado da feature");
     }
 
     features.set_status(feature_id, FeatureStatus::Pending)?;

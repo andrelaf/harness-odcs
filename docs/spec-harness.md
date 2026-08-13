@@ -1,6 +1,6 @@
 # Spec do Harness — contrato congelado
 
-> **Versão da spec:** 2 — ver [Mudanças](#12-mudanças)
+> **Versão da spec:** 3 — ver [Mudanças](#12-mudanças)
 > **Status:** congelada. Mudança aqui é decisão explícita, não efeito colateral de implementação.
 > **Escopo:** o harness. Nada do classificador. A spec de cada feature de domínio (F1–F4) é escrita na sessão da própria feature.
 
@@ -38,8 +38,15 @@ Corolário: existe **um único** ponto de entrada, `run.sh`. Não há `run.ps1`,
 | `verify` | Re-executa apenas a fase `verify` da feature corrente. | sim (trace) |
 | `handoff` | Re-executa apenas a fase `handoff` da feature corrente. | sim |
 | `doctor` | Executa as checagens de ambiente e reporta PASS/FAIL por item. | não |
-| `approve <feature>` | Libera uma feature em `Blocked` para prosseguir no próximo `next`. | sim |
+| `approve <feature>` | Libera uma feature em `Blocked` e **arquiva o pedido de gate** que a bloqueou. | sim |
 | `reset <feature>` | Devolve uma feature `Done` ou `Failed` para `Pending`, para reexecução. | sim |
+
+Sobre `approve`: ele **não** decide nada de domínio. A feature que bloqueia
+deixa o pedido em `state/gate-pendente.json`; `approve` o move para
+`state/aprovacoes.json` com data e run, e apaga o pendente. A aprovação é
+gravada pelo **hash do pedido**, não pelo nome da feature — vale para aquele
+conjunto de itens, e nada mais. Mudou a entrada, o hash muda e o gate fecha
+outra vez. O comando recusa liberar pedido que pertence a outra feature.
 
 Sobre `reset`: uma feature concluída não tem como ser reexecutada sem editar
 `state/feature-list.json` na mão — e editar estado na mão é exatamente o que o
@@ -148,7 +155,16 @@ Não existe transição para trás, não existe pulo de fase e não existe camin
 
 ## 5. Estado
 
-Dois arquivos em `state/`, ambos versionados no Git. Estado é evidência, não artefato de build.
+Quatro arquivos em `state/`, todos versionados no Git. Estado é evidência, não artefato de build.
+
+Os dois primeiros existem sempre; os dois do gate só existem quando há gate:
+
+| Arquivo | Quando existe |
+|---|---|
+| `feature-list.json` | sempre |
+| `progress.json` | sempre |
+| `gate-pendente.json` | entre o `Blocked` de uma feature e o `approve` que o consome |
+| `aprovacoes.json` | a partir da primeira aprovação; append-only |
 
 Escrita **atômica** obrigatória: escreve em temporário, depois renomeia. Crash no meio da escrita não pode deixar estado corrompido — e o exit `4` existe exatamente para o caso em que deixou.
 
@@ -196,6 +212,30 @@ A ordem é explícita no campo `order`. Nunca inferida de posição no array nem
 quatro.
 
 `max_steps` mora **no arquivo**, não em constante compilada nem em variável de ambiente. A Semana 3 precisa provar o abort por teto; o teto tem que ser inspecionável e ajustável sem recompilar.
+
+### `state/gate-pendente.json` e `state/aprovacoes.json`
+
+```json
+{ "schema_version": 1, "feature": "f4-gate",
+  "gate_sha256": "4f773bab…", "run_id": "20260813T031348Z-11391c",
+  "criado_em": "2026-08-13T03:13:51Z",
+  "resumo": "2 lacuna(s), 0 reclassificacao(oes), 0 conflito(s)",
+  "itens": ["[lacuna] segmento — …"] }
+```
+
+```json
+{ "schema_version": 1, "aprovacoes": [
+  { "feature": "f4-gate", "gate_sha256": "4f773bab…",
+    "aprovado_em": "2026-08-13T03:14:02Z", "run_id": "…", "resumo": "…" } ] }
+```
+
+O `gate_sha256` é a identidade do **conteúdo** submetido, calculada pela
+feature. O harness não sabe o que ele significa — só que a aprovação vale para
+aquele hash e para aquela feature. É o que impede uma aprovação de virar passe
+permanente.
+
+`itens` são as linhas que a pessoa lê para decidir. Quem aprova não aprova um
+hash.
 
 ### Invariantes
 
@@ -273,6 +313,7 @@ O `smoke` compara o digest da imagem local com `DC_DIGEST` e falha se divergir. 
 - O harness **não escreve na `main`**. `next` recusa executar com `HEAD` em `main` sem branch de trabalho.
 - Branch por feature: `feat/<feature-id>`.
 - O commit é feito pela fase `handoff` e **anunciado no output** — o operador vê o hash sem precisar procurar.
+- Escopo do commit: `state/`, `trace/`, `evidence/` e `contracts/`. Nunca a árvore inteira. `contracts/` está na lista porque o contrato enriquecido é o entregável, e o diff dele é o que vai para revisão.
 - Nenhum segredo é persistido em artefato versionado.
 
 ---
@@ -306,6 +347,29 @@ Ideias novas de qualquer natureza vão para `BACKLOG-FUTURO.md` — não entram 
 ## 12. Mudanças
 
 Registro das decisões que alteraram este contrato depois de congelado.
+
+### Versão 3 — 13/08/2026
+
+**`approve` passou a arquivar o pedido de gate** (seções 2 e 5), com dois
+arquivos novos em `state/`: `gate-pendente.json` e `aprovacoes.json`.
+
+Motivo: na v2, `approve` só devolvia a feature para `Pending`. Implementando F4
+isso se mostrou insuficiente — a feature bloqueia recomputando a mesma
+divergência a cada run, então voltar para `Pending` fazia o `next` seguinte
+bloquear de novo, em laço. Faltava o registro de *o quê* foi aprovado.
+
+A alternativa descartada foi carimbar a aprovação na feature ("f4 está
+liberada"). Seria um passe permanente: aprovar uma lacuna hoje liberaria em
+silêncio uma despromoção de campo PII amanhã. A aprovação vale para um
+conteúdo, identificado por hash — e o hash é calculado pela feature, não pelo
+núcleo, que continua sem saber o que ele significa.
+
+`approve` segue burro: não recomputa nada, só move o pedido para o livro.
+
+**Escopo do commit do `handoff` ganhou `contracts/`** (seção 8). O contrato
+enriquecido é o entregável do projeto e F4 o escreve ali depois do veredito;
+fora da lista, o commit registraria a decisão em `evidence/` e não o efeito
+dela.
 
 ### Versão 2 — 12/08/2026
 
