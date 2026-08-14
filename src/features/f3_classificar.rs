@@ -228,7 +228,7 @@ pub fn laudo_atual(run: &mut Run, feature: &str, fase: &str) -> Result<Classific
 }
 
 fn catalogo_do_disco(run: &Run) -> Result<(Catalogo, String), String> {
-    let path = run.cfg.root.join(CATALOGO);
+    let path = run.cfg.vocab.join(CATALOGO);
     let bruto = fs::read_to_string(&path)
         .map_err(|e| format!("catalogo `{CATALOGO}` ilegivel em {} ({e})", path.display()))?;
     let catalogo = carregar_catalogo(&bruto).map_err(|e| format!("{e:#}"))?;

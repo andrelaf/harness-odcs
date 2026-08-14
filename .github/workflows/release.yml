@@ -1,0 +1,80 @@
+# Publica o pacote distribuivel do harness.
+#
+# E o que torna o repositorio de contratos possivel: la nao ha Rust, nao ha
+# `src/` e nao ha vocabulario. Ha um tarball fixado por versao E sha256 — a
+# mesma disciplina que ja aplicamos a imagem do datacontract-cli, e pelo mesmo
+# motivo: o mesmo contrato nao pode passar hoje e reprovar amanha sem que
+# ninguem tenha commitado nada.
+#
+# O conteudo do pacote e montado por `scripts/package.sh`, que roda igual aqui e
+# na maquina de quem desenvolve. Se o empacotamento morasse neste YAML, o pacote
+# testado localmente nao seria o pacote publicado.
+
+name: release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  linux-x64:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: Swatinem/rust-cache@v2
+
+      # Um release que nao passa nos testes e um defeito distribuido por
+      # versao fixada — pior que um defeito local, porque agora ele tem numero
+      # e alguem vai fixa-lo de proposito.
+      - name: testes
+        run: cargo test --quiet
+
+      - name: montar o pacote
+        run: ./scripts/package.sh "$RUNNER_TEMP/harness-odcs"
+
+      # O tarball guarda o diretorio `harness-odcs/`, e nao seu conteudo solto:
+      # extrair um pacote que se espalha pelo diretorio de trabalho de quem
+      # baixou e uma surpresa que se paga uma vez e nao se esquece.
+      - name: empacotar
+        run: |
+          tar -C "$RUNNER_TEMP" -czf harness-odcs-linux-x64.tar.gz harness-odcs
+          sha256sum harness-odcs-linux-x64.tar.gz \
+            | tee harness-odcs-linux-x64.tar.gz.sha256
+
+      # As notas carregam a procedencia do criterio — versao e sha256 do
+      # glossario e do catalogo. E o que permite responder "qual vocabulario
+      # julgou este contrato?" sem baixar o pacote.
+      - name: notas
+        run: |
+          {
+            echo '## Pacote'
+            echo
+            echo '```'
+            cat "$RUNNER_TEMP/harness-odcs/VERSION"
+            echo
+            cat harness-odcs-linux-x64.tar.gz.sha256
+            echo '```'
+            echo
+            echo '## Como consumir'
+            echo
+            echo 'Num repositorio de contratos, fixe **versao e sha256** — nunca só a versao:'
+            echo
+            echo '```yaml'
+            echo "HARNESS_VERSAO: ${GITHUB_REF_NAME}"
+            echo "HARNESS_SHA256: $(cut -d' ' -f1 harness-odcs-linux-x64.tar.gz.sha256)"
+            echo '```'
+          } > NOTAS.md
+
+      - name: publicar
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" \
+            harness-odcs-linux-x64.tar.gz \
+            harness-odcs-linux-x64.tar.gz.sha256 \
+            --title "$GITHUB_REF_NAME" \
+            --notes-file NOTAS.md

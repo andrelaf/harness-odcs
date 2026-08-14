@@ -13,7 +13,16 @@ use std::path::PathBuf;
 
 #[derive(Debug, Clone)]
 pub struct Config {
+    /// A raiz dos **dados**: `contracts/`, e onde `trace/` e `evidence/` sao
+    /// escritos. Num repositorio de contratos, e o checkout dele.
     pub root: PathBuf,
+    /// A raiz do **vocabulario**: `glossary/` e `classification/`.
+    ///
+    /// Separada de `root` porque quem escreve o contrato nao pode escrever o
+    /// criterio que o julga — e a separacao que o gate do F4 pressupoe. Neste
+    /// repositorio as duas coincidem; num repositorio de contratos, o
+    /// vocabulario vem do pacote e a raiz e o checkout.
+    pub vocab: PathBuf,
     pub dc_image: String,
     pub dc_digest: String,
 }
@@ -31,6 +40,7 @@ impl Config {
             // no Windows, e `/c/repos/...` nao existe para ele. Em Linux e
             // macOS as duas formas coincidem.
             root: PathBuf::from(var("HARNESS_ROOT_NATIVE")?),
+            vocab: PathBuf::from(var("HARNESS_VOCAB_NATIVE")?),
             dc_image: var("DC_IMAGE")?,
             dc_digest: var("DC_DIGEST")?,
         })

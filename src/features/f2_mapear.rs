@@ -217,7 +217,7 @@ pub fn mapeamento_atual(run: &mut Run, feature: &str, fase: &str) -> Result<Mape
 /// O glossario do disco, com o sha256 do que foi lido. Publica porque F3
 /// tambem precisa saber contra qual vocabulario esta trabalhando.
 pub fn glossario_do_disco(run: &Run) -> Result<(Glossario, String), String> {
-    let path = run.cfg.root.join(GLOSSARIO);
+    let path = run.cfg.vocab.join(GLOSSARIO);
     let bruto = fs::read_to_string(&path).map_err(|e| {
         format!(
             "glossario `{GLOSSARIO}` ilegivel em {} ({e})",
