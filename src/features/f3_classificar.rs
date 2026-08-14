@@ -646,7 +646,9 @@ fn serializar(l: &Laudo) -> Result<String> {
     serde_json::to_string_pretty(l).context("serializando a classificacao")
 }
 
-fn niveis_legivel(por_nivel: &BTreeMap<String, usize>) -> String {
+/// Publica porque o laudo de F4 mostra a mesma contagem. Duas formatacoes da
+/// mesma coisa divergiriam na primeira vez que uma delas ganhasse um nivel novo.
+pub fn niveis_legivel(por_nivel: &BTreeMap<String, usize>) -> String {
     if por_nivel.is_empty() {
         return "-".to_string();
     }
@@ -657,7 +659,10 @@ fn niveis_legivel(por_nivel: &BTreeMap<String, usize>) -> String {
         .join(", ")
 }
 
-fn sim_nao(v: Option<bool>) -> &'static str {
+/// `None` e travessao, e nao "nao": o campo nao foi decidido, e escrever "nao"
+/// ali afirmaria que ele nao e PII. Publica pelo mesmo motivo de
+/// `niveis_legivel` — o laudo de F4 responde a mesma pergunta.
+pub fn sim_nao(v: Option<bool>) -> &'static str {
     match v {
         Some(true) => "sim",
         Some(false) => "nao",

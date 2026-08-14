@@ -21,13 +21,15 @@
 use crate::features::contrato;
 use crate::features::f1_validar;
 use crate::features::f2_mapear::Mapeamento;
-use crate::features::f3_classificar::{self, CampoClassificado, Catalogo, Laudo, Situacao};
+use crate::features::f3_classificar::{
+    self, CampoClassificado, Catalogo, Laudo, Situacao, niveis_legivel, sim_nao,
+};
 use crate::flow::Outcome;
 use crate::phases::Run;
 use crate::state::{Aprovacoes, GatePendente, SCHEMA_VERSION};
 use crate::tools;
 use crate::trace;
-use anyhow::{Context, Result};
+use anyhow::{Context, Result, bail};
 use serde::Serialize;
 use serde_norway::Value;
 use std::collections::{BTreeMap, BTreeSet};
@@ -193,7 +195,27 @@ pub fn verify(run: &mut Run) -> Outcome {
     // sem classificacao — e por decisao de quem.
     declarar_riscos(run, &c, aprovacao.map(|a| a.aprovado_em.clone()));
 
-    aplicar_no_contrato(run, &c)
+    persistir(run, &c)
+}
+
+/// O que fica no repositorio depois do PASS: o contrato classificado e o laudo
+/// que responde por ele.
+///
+/// **Contrato primeiro.** O laudo carrega o sha256 do contrato classificado,
+/// entao a ordem decide como fica o repositorio se a segunda escrita falhar.
+/// Contrato escrito e laudo faltando e uma ausencia — visivel, e o run seguinte
+/// emite. Laudo escrito e contrato faltando seria um documento afirmando um
+/// sha256 que nao esta em lugar nenhum: um laudo errado, que e pior que um
+/// laudo ausente.
+fn persistir(run: &mut Run, c: &Composicao) -> Outcome {
+    match aplicar_no_contrato(run, c) {
+        Outcome::Pass => {}
+        outro => return outro,
+    }
+    match gravar_laudo(run, c) {
+        Ok(()) => Outcome::Pass,
+        Err(e) => Outcome::Fail(e),
+    }
 }
 
 fn declarar_riscos(run: &mut Run, c: &Composicao, aprovado_em: Option<String>) {
@@ -411,6 +433,238 @@ fn aplicar_no_contrato(run: &mut Run, c: &Composicao) -> Outcome {
         c.proposta.resumo.classificados
     ));
     Outcome::Pass
+}
+
+// --- O laudo ---------------------------------------------------------------------
+//
+// "Laudo" tem dois sentidos neste codigo, e vale separa-los: `f3::Laudo` e a
+// classificacao como estrutura de dados; o laudo desta secao e o **documento**
+// entregue — o que o time de governanca hoje escreve a mao.
+//
+// O documento nao e evidencia de execucao, e por isso nao mora em
+// `evidence/<run_id>/`: evidencia e regeneravel e descartavel, laudo e registro
+// emitido. Ele fica ao lado do contrato, versionado, e entra no mesmo commit
+// que a classificacao a que se refere.
+
+/// Onde o laudo de um contrato e arquivado.
+///
+/// Nome por **versao do contrato + sha256 do contrato classificado**: a versao
+/// para um humano achar, o sha para nao sobrescrever. Dois laudos da mesma
+/// versao existem de verdade — mesma `version` reclassificada por um catalogo
+/// novo sao duas constatacoes diferentes, e apagar a primeira destruiria
+/// justamente o que a auditoria quer comparar.
+fn caminho_do_laudo(versao: &str, sha: &str) -> String {
+    let dir = std::path::Path::new(contrato::CAMINHO)
+        .parent()
+        .map(|p| p.to_string_lossy().replace('\\', "/"))
+        .unwrap_or_else(|| "contracts".to_string());
+    format!("{dir}/laudos/{versao}-{}.md", &sha[..7])
+}
+
+/// Funcao pura: a `version` que o contrato declara.
+///
+/// Erro e nao default: a versao entra no nome do arquivo, e um contrato sem ela
+/// produziria `-a1b2c3d.md` — legivel para ninguem, e dois contratos sem versao
+/// nao colidiriam so por sorte do sha.
+pub fn versao_do_yaml(bruto: &str) -> Result<String> {
+    let doc: Value = serde_norway::from_str(bruto).context("contrato nao e YAML valido")?;
+    // `version: 1.0` e numero em YAML, nao string. Recusar por tipo faria o
+    // harness reprovar um contrato que o ODCS aceita.
+    let versao = match doc.get("version") {
+        Some(Value::String(s)) => s.trim().to_string(),
+        Some(Value::Number(n)) => n.to_string(),
+        _ => bail!("contrato sem `version` — o laudo precisa dela para ser identificavel"),
+    };
+    if versao.is_empty() {
+        bail!("contrato com `version` vazia — o laudo precisa dela para ser identificavel");
+    }
+    if versao.contains(['/', '\\', ':']) || versao.contains(char::is_whitespace) {
+        bail!("`version` `{versao}` nao serve como nome de arquivo para o laudo");
+    }
+    Ok(versao)
+}
+
+/// Emite o laudo, ou reconhece que ele ja foi emitido para este conteudo.
+fn gravar_laudo(run: &mut Run, c: &Composicao) -> Result<(), String> {
+    // A versao e o sha saem do contrato **classificado**, e nao da fonte: e o
+    // arquivo classificado que fica no repositorio, e e a ele que o laudo
+    // responde.
+    let versao = versao_do_yaml(&c.yaml_enriquecido).map_err(|e| format!("{e:#}"))?;
+    let sha = tools::sha256_hex(&c.yaml_enriquecido);
+    let destino = caminho_do_laudo(&versao, &sha);
+    let corpo = documento_do_laudo(&c.proposta, &c.laudo, &versao, &sha);
+
+    let path = run.cfg.root.join(&destino);
+    if let Some(dir) = path.parent() {
+        fs::create_dir_all(dir).map_err(|e| format!("criando {}: {e}", dir.display()))?;
+    }
+
+    // Reemitir identico nao e escrita: o documento e deterministico, entao o
+    // mesmo conteudo no mesmo caminho significa que este laudo ja existe. Sem
+    // isto, rodar o fluxo duas vezes sujaria o `git status` sem nada ter mudado.
+    if fs::read_to_string(&path).is_ok_and(|atual| atual == corpo) {
+        run.note(format!(
+            "laudo {destino} ja emitido para este conteudo — nada a escrever"
+        ));
+        return Ok(());
+    }
+
+    fs::write(&path, &corpo).map_err(|e| format!("escrevendo {destino}: {e}"))?;
+    run.note(format!("laudo emitido em {destino}"));
+    Ok(())
+}
+
+/// Um sha256 encurtado para leitura, sem poder entrar em panico.
+///
+/// `&sha[..16]` e o idioma do resto do arquivo e serve porque ali os hashes vem
+/// sempre de `sha256_hex`. Aqui nao vale correr o risco: o laudo e o unico
+/// artefato que sai deste repositorio para quem nao roda o harness, e um panico
+/// na formatacao de um cabecalho derrubaria a fase inteira.
+fn curto(sha: &str) -> &str {
+    &sha[..sha.len().min(16)]
+}
+
+/// Uma celula de tabela markdown.
+///
+/// A justificativa vem do catalogo, escrita por gente, com quebra de linha do
+/// YAML e eventualmente um `|` no meio. Sem achatar e escapar, uma entrada bem
+/// escrita quebraria a tabela inteira do laudo — em silencio.
+fn celula(s: &str) -> String {
+    s.split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ")
+        .replace('|', "\\|")
+}
+
+/// O laudo, na forma em que e entregue.
+///
+/// **Sem data e sem `run_id`**, pela mesma razao que a proposta e a
+/// classificacao de F3: o mesmo contrato, com o mesmo glossario e o mesmo
+/// catalogo, produz este documento byte a byte. Reemitir nunca gera diff, e a
+/// data de emissao e a do commit — o Git ja e a autoridade de tempo aqui, e um
+/// carimbo no corpo faria o arquivo mudar sem que a analise tivesse mudado.
+///
+/// Pela mesma razao ele **nao registra a aprovacao**: o documento e a
+/// constatacao tecnica. Quem assina e o merge, e a revisao que o autorizou fica
+/// no historico, presa ao mesmo sha256 que esta aqui no cabecalho.
+fn documento_do_laudo(p: &Proposta, l: &Laudo, versao: &str, sha_final: &str) -> String {
+    let mut s = String::new();
+
+    s.push_str("# Laudo de classificacao de privacidade\n\n");
+    s.push_str(&format!(
+        "**Contrato** `{}` v{versao}  \n**sha256** `{sha_final}`\n\n",
+        p.contrato
+    ));
+    s.push_str(
+        "O sha256 acima e o do contrato **classificado** — o arquivo que esta neste \
+         repositorio, ao lado deste laudo. Quem auditar confere a correspondencia com \
+         qualquer ferramenta de hash, sem depender deste projeto.\n\n",
+    );
+
+    s.push_str("## Criterio aplicado\n\n");
+    s.push_str("| Insumo | Versao | sha256 |\n|---|---|---|\n");
+    s.push_str(&format!(
+        "| Glossario `{}` | {} | `{}` |\n",
+        l.glossario,
+        l.glossario_versao,
+        curto(&l.glossario_sha256)
+    ));
+    s.push_str(&format!(
+        "| Catalogo `{}` | {} | `{}` |\n\n",
+        l.catalogo,
+        l.catalogo_versao,
+        curto(&l.catalogo_sha256)
+    ));
+    s.push_str(
+        "A classificacao e **consulta a catalogo**: cada campo do contrato e mapeado a um \
+         termo do glossario, e o termo carrega a classificacao, a justificativa e a base \
+         legal. Nao ha inferencia sobre nome de campo e nenhum modelo participa da decisao \
+         — dois campos que casam com o mesmo termo recebem a mesma resposta em qualquer \
+         contrato, em qualquer data.\n\n",
+    );
+
+    s.push_str("## Resumo\n\n");
+    s.push_str(&format!("- {} campo(s) analisado(s)\n", p.resumo.campos));
+    s.push_str(&format!(
+        "- {} classificado(s) — {} PII, {} sensivel\n",
+        p.resumo.classificados, l.resumo.pii, l.resumo.sensivel
+    ));
+    s.push_str(&format!(
+        "- por nivel: {}\n",
+        niveis_legivel(&l.resumo.por_nivel)
+    ));
+    s.push_str(&format!(
+        "- {} sem classificacao\n\n",
+        p.resumo.lacunas + p.resumo.conflitos
+    ));
+
+    s.push_str("## Classificacao por campo\n\n");
+    s.push_str(
+        "| Campo | Termo | `classification` | PII | Sensivel | Base legal | Justificativa |\n",
+    );
+    s.push_str("|---|---|---|---|---|---|---|\n");
+    for c in &p.campos {
+        s.push_str(&format!(
+            "| `{}` | {} | {} | {} | {} | {} | {} |\n",
+            c.campo,
+            c.termo
+                .as_deref()
+                .map(|t| format!("`{t}`"))
+                .unwrap_or_else(|| "—".to_string()),
+            match &c.proposto.classification {
+                Some(n) => format!("`{n}`"),
+                None => "**sem classificacao**".to_string(),
+            },
+            sim_nao(c.proposto.pii),
+            sim_nao(c.proposto.sensivel),
+            celula(c.referencia.as_deref().unwrap_or("—")),
+            celula(&c.justificativa),
+        ));
+    }
+
+    s.push_str("\n## Pendencias de decisao humana\n\n");
+    if p.gate.is_empty() {
+        s.push_str(
+            "Nenhuma. Todo campo classificado veio do catalogo sem contrariar decisao \
+             anterior, e nenhum campo ficou sem decisao.\n",
+        );
+    } else {
+        s.push_str(&format!(
+            "{} item(ns), sob o pedido `{}`. Enquanto houver pendencia aqui, o campo \
+             correspondente **nao** recebe classificacao no contrato: o harness nao escreve \
+             \"nao sei\" num contrato de dados.\n\n",
+            p.gate.len(),
+            curto(&p.gate_sha256)
+        ));
+        s.push_str("| Tipo | Campo | Detalhe |\n|---|---|---|\n");
+        for i in &p.gate {
+            s.push_str(&format!(
+                "| `{}` | `{}` | {} |\n",
+                i.tipo.rotulo(),
+                i.campo,
+                celula(&i.detalhe)
+            ));
+        }
+        s.push_str(
+            "\nLacuna se resolve ampliando o glossario e o catalogo — ou aceitando, por \
+             decisao registrada, que o campo siga sem classificacao.\n",
+        );
+    }
+
+    s.push_str("\n## Sobre este documento\n\n");
+    s.push_str(
+        "E deterministico: o mesmo contrato, com o mesmo glossario e o mesmo catalogo, \
+         produz este arquivo byte a byte. Nao ha data no corpo de proposito — a data de \
+         emissao e a do commit, e o Git ja responde por ela.\n\n\
+         Nao ha aprovacao no corpo pelo mesmo motivo: este e o laudo tecnico, e quem \
+         assina e o merge. A revisao que o autorizou fica no historico do repositorio, \
+         presa ao mesmo sha256 do cabecalho.\n\n\
+         Subir a versao do catalogo pode mudar a classificacao de um termo sem que o \
+         contrato mude. Quando isso acontecer, este laudo continua valendo para o criterio \
+         que o gerou, e um novo sera emitido ao lado dele.\n",
+    );
+
+    s
 }
 
 /// Grava o pedido de gate e para o fluxo.
@@ -643,6 +897,17 @@ pub struct CampoDoGate {
     pub mudanca: Mudanca,
     pub proposto: Marcacao,
     pub declarado: Marcacao,
+    /// Por que o catalogo classifica assim. Vem da entrada do catalogo, via F3:
+    /// o harness carrega a justificativa, nunca a redige.
+    ///
+    /// Sem isto o laudo sai com a conclusao e sem o criterio — que e a
+    /// diferenca entre um laudo e uma tabela.
+    pub justificativa: String,
+    /// A base legal da decisao, como o catalogo a declara.
+    ///
+    /// `None` quando nao ha classificacao a propor: lacuna nao tem artigo de
+    /// lei, tem ausencia de vocabulario.
+    pub referencia: Option<String>,
 }
 
 /// Funcao pura: proposta do catalogo x o que o contrato declara.
@@ -674,6 +939,11 @@ pub fn confrontar(
                 mudanca,
                 proposto,
                 declarado,
+                // Passam por aqui sem serem tocadas. F3 ja as leu do catalogo,
+                // e reescrever qualquer uma delas seria o harness opinando
+                // sobre a decisao em vez de transporta-la.
+                justificativa: c.justificativa.clone(),
+                referencia: c.referencia.clone(),
             }
         })
         .collect()
@@ -1388,5 +1658,195 @@ classificacoes:
         assert_eq!(r.lacunas, 1);
         assert_eq!(r.reclassificacoes, 0);
         assert_eq!(r.conflitos, 0);
+    }
+
+    /// Todo campo classificado no contrato real tem base legal. E a condicao
+    /// para o laudo gerado substituir o que o time escreve a mao: sem o artigo,
+    /// o documento e uma tabela de conclusoes.
+    #[test]
+    fn todo_campo_classificado_do_repositorio_tem_base_legal() {
+        for c in repositorio_com(&catalogo_do_repositorio()) {
+            if c.proposto.classification.is_none() {
+                continue;
+            }
+            assert!(
+                c.referencia
+                    .as_deref()
+                    .is_some_and(|r| !r.trim().is_empty()),
+                "campo `{}` classificado sem base legal",
+                c.campo
+            );
+            assert!(
+                !c.justificativa.trim().is_empty(),
+                "campo `{}` classificado sem justificativa",
+                c.campo
+            );
+        }
+    }
+
+    // --- A base legal atravessando para F4 -------------------------------------
+
+    /// O que F3 leu do catalogo tem de chegar inteiro a F4. Enquanto nao
+    /// chegava, `f4-proposta.json` saia com a conclusao e sem o criterio.
+    #[test]
+    fn justificativa_e_base_legal_atravessam_para_o_confronto() {
+        let campos = confronto_de(CONTRATO);
+        let cpf = campos.iter().find(|c| c.campo == "cpf").unwrap();
+        assert_eq!(cpf.referencia.as_deref(), Some("LGPD art. 5, I"));
+        assert!(cpf.justificativa.contains("Identificador univoco"));
+    }
+
+    /// Lacuna nao tem artigo de lei: tem ausencia de vocabulario.
+    #[test]
+    fn campo_sem_classificacao_nao_ganha_base_legal() {
+        let campos = confronto_de(CONTRATO);
+        let seg = campos.iter().find(|c| c.campo == "segmento").unwrap();
+        assert_eq!(seg.referencia, None);
+        assert!(seg.justificativa.contains("decisao humana"));
+    }
+
+    /// O pedido de gate e sobre o **que** se decide, nao sobre a redacao do
+    /// porque. Se a base legal entrasse no hash, corrigir uma virgula na
+    /// justificativa de um termo invalidaria aprovacoes que ninguem pediu para
+    /// revisar.
+    #[test]
+    fn base_legal_nao_entra_no_hash_do_gate() {
+        let antes = hash_do_gate(&itens_de_gate(&confronto_de(CONTRATO)));
+
+        let mut campos = confronto_de(CONTRATO);
+        for c in &mut campos {
+            c.justificativa = "redacao completamente diferente".to_string();
+            c.referencia = Some("outra lei".to_string());
+        }
+        assert_eq!(antes, hash_do_gate(&itens_de_gate(&campos)));
+    }
+
+    // --- O laudo ----------------------------------------------------------------
+
+    fn proposta_de(yaml: &str) -> (Proposta, Laudo) {
+        let l = laudo();
+        let campos = confrontar(&l.campos, &declaracao_do_yaml(yaml).unwrap());
+        let gate = itens_de_gate(&campos);
+        let p = Proposta {
+            contrato: contrato::CAMINHO.to_string(),
+            contrato_sha256: l.contrato_sha256.clone(),
+            glossario_versao: l.glossario_versao.clone(),
+            catalogo_versao: l.catalogo_versao.clone(),
+            resumo: resumir(&campos),
+            gate_sha256: hash_do_gate(&gate),
+            gate,
+            campos,
+        };
+        (p, l)
+    }
+
+    #[test]
+    fn laudo_traz_a_base_legal_de_cada_campo_classificado() {
+        let (p, l) = proposta_de(CONTRATO);
+        let doc = documento_do_laudo(&p, &l, "1.0.0", "abcdef1234567890");
+
+        assert!(doc.contains("Base legal"), "{doc}");
+        assert!(doc.contains("LGPD art. 5, I"), "{doc}");
+        assert!(
+            doc.contains("Identificador univoco de pessoa natural."),
+            "{doc}"
+        );
+    }
+
+    /// O laudo nomeia o criterio, e nao so o resultado: quem audita pergunta
+    /// qual catalogo classificou este campo.
+    #[test]
+    fn laudo_nomeia_glossario_e_catalogo_com_versao() {
+        let (p, l) = proposta_de(CONTRATO);
+        let doc = documento_do_laudo(&p, &l, "1.0.0", "abcdef1234567890");
+        assert!(doc.contains("Criterio aplicado"));
+        assert!(doc.contains("classification/catalogo-lgpd.yaml"), "{doc}");
+        assert!(doc.contains("glossary/glossario.yaml"), "{doc}");
+    }
+
+    /// A lacuna aparece no laudo, nomeada. Um laudo que so lista o que deu
+    /// certo esconde exatamente o que o revisor precisa ver.
+    #[test]
+    fn laudo_lista_as_pendencias() {
+        let (p, l) = proposta_de(CONTRATO);
+        let doc = documento_do_laudo(&p, &l, "1.0.0", "abcdef1234567890");
+        assert!(doc.contains("Pendencias de decisao humana"));
+        assert!(doc.contains("segmento"), "{doc}");
+        assert!(doc.contains("lacuna"), "{doc}");
+    }
+
+    /// Registro que muda sozinho nao serve como registro. A data e a do commit,
+    /// entao nao pode haver carimbo no corpo — e reemitir nao pode gerar diff.
+    #[test]
+    fn laudo_e_deterministico_e_sem_run_id() {
+        let (p, l) = proposta_de(CONTRATO);
+        let a = documento_do_laudo(&p, &l, "1.0.0", "abcdef1234567890");
+        let b = documento_do_laudo(&p, &l, "1.0.0", "abcdef1234567890");
+        assert_eq!(a, b);
+        assert!(!a.contains("run_id"), "laudo nao pode carregar run_id");
+    }
+
+    /// A justificativa vem do catalogo, escrita por gente. Um `|` no meio dela
+    /// quebraria a tabela inteira, em silencio.
+    #[test]
+    fn celula_escapa_pipe_e_achata_quebra_de_linha() {
+        assert_eq!(celula("a | b"), "a \\| b");
+        assert_eq!(celula("linha um\n   linha dois"), "linha um linha dois");
+    }
+
+    #[test]
+    fn curto_nao_entra_em_panico_com_hash_pequeno() {
+        assert_eq!(curto("abc"), "abc");
+        assert_eq!(curto("0123456789abcdef00"), "0123456789abcdef");
+    }
+
+    // --- Onde o laudo e arquivado -----------------------------------------------
+
+    #[test]
+    fn laudo_fica_ao_lado_do_contrato_com_versao_e_sha_no_nome() {
+        assert_eq!(
+            caminho_do_laudo("1.2.0", "abcdef1234567890"),
+            "contracts/clientes/laudos/1.2.0-abcdef1.md"
+        );
+    }
+
+    /// Mesma versao reclassificada por um catalogo novo sao duas constatacoes
+    /// diferentes. O sha no nome e o que impede a segunda de apagar a primeira.
+    #[test]
+    fn contratos_diferentes_na_mesma_versao_nao_colidem() {
+        assert_ne!(
+            caminho_do_laudo("1.0.0", "aaaaaaa1111"),
+            caminho_do_laudo("1.0.0", "bbbbbbb2222")
+        );
+    }
+
+    #[test]
+    fn versao_do_yaml_aceita_string_e_numero() {
+        assert_eq!(versao_do_yaml("version: 1.0.0\n").unwrap(), "1.0.0");
+        let n = versao_do_yaml("version: 1.0\n").unwrap();
+        assert!(n.starts_with('1'), "{n}");
+    }
+
+    #[test]
+    fn contrato_sem_versao_nao_emite_laudo() {
+        let e = versao_do_yaml("id: x\n").unwrap_err();
+        assert!(format!("{e:#}").contains("version"), "{e:#}");
+    }
+
+    /// A versao vira nome de arquivo. `1.0/2` criaria um diretorio.
+    #[test]
+    fn versao_que_nao_serve_de_nome_de_arquivo_e_recusada() {
+        assert!(versao_do_yaml("version: \"1.0/2\"\n").is_err());
+        assert!(versao_do_yaml("version: \"1.0 rc\"\n").is_err());
+    }
+
+    /// O contrato do repositorio tem de conseguir emitir laudo — se a versao
+    /// dele nao servisse de nome de arquivo, o fluxo quebraria so em producao.
+    #[test]
+    fn o_contrato_do_repositorio_emite_laudo() {
+        let contrato = include_str!("../../contracts/clientes/contract.odcs.yaml");
+        let v = versao_do_yaml(contrato).unwrap();
+        assert!(!v.is_empty());
+        assert!(caminho_do_laudo(&v, "abcdef1234567890").ends_with(".md"));
     }
 }
