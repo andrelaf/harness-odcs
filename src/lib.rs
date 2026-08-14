@@ -4,6 +4,7 @@
 //! de IDE. O binario (`src/main.rs`) so traduz argumentos e propaga exit code.
 //! Contrato completo em `docs/spec-harness.md`.
 
+pub mod check;
 pub mod checks;
 pub mod config;
 pub mod exit;

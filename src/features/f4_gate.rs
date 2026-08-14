@@ -30,7 +30,7 @@ use crate::state::{Aprovacoes, GatePendente, SCHEMA_VERSION};
 use crate::tools;
 use crate::trace;
 use anyhow::{Context, Result, bail};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use serde_norway::Value;
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
@@ -100,18 +100,7 @@ pub fn verify(run: &mut Run) -> Outcome {
         Err(e) => return Outcome::Fail(e),
     };
 
-    // As garantias de F3 valem aqui chamadas, nao reescritas: cobertura total,
-    // classificacao vinda do catalogo, resumo batendo com as decisoes.
-    let mut defeitos = f3_classificar::conferir_cobertura(&c.mapeamento, &c.laudo, &c.catalogo);
-
-    // Classificacao que nao achou onde ser escrita e decisao perdida em
-    // silencio — o oposto do que o harness existe para garantir.
-    for campo in &c.nao_aplicados {
-        defeitos.push(format!(
-            "campo `{campo}` foi classificado mas nao existe como propriedade no contrato — \
-             o enriquecimento nao teria onde ser escrito"
-        ));
-    }
+    let mut defeitos = defeitos_da_composicao(&c);
 
     let aprovacoes = match Aprovacoes::load_or_default(&run.cfg.aprovacoes_path()) {
         Ok(a) => a,
@@ -218,6 +207,32 @@ fn persistir(run: &mut Run, c: &Composicao) -> Outcome {
     }
 }
 
+/// O que reprova o enriquecimento, independentemente de quem esta perguntando.
+///
+/// Extraida de `verify` para que `check` — a verificacao efemera que o CI roda
+/// — julgue pelo **mesmo** codigo. Duas listas de defeitos escritas em lugares
+/// diferentes divergiriam na primeira regra nova, e ai o CI e a maquina de quem
+/// desenvolve passariam a discordar sobre o mesmo contrato.
+///
+/// Fica de fora daqui a assercao de gate sem aprovacao: aquela e sobre o fluxo
+/// ter se comportado, nao sobre o contrato estar certo.
+pub(crate) fn defeitos_da_composicao(c: &Composicao) -> Vec<String> {
+    // As garantias de F3 valem aqui chamadas, nao reescritas: cobertura total,
+    // classificacao vinda do catalogo, resumo batendo com as decisoes.
+    let mut defeitos = f3_classificar::conferir_cobertura(&c.mapeamento, &c.laudo, &c.catalogo);
+
+    // Classificacao que nao achou onde ser escrita e decisao perdida em
+    // silencio — o oposto do que o harness existe para garantir.
+    for campo in &c.nao_aplicados {
+        defeitos.push(format!(
+            "campo `{campo}` foi classificado mas nao existe como propriedade no contrato — \
+             o enriquecimento nao teria onde ser escrito"
+        ));
+    }
+
+    defeitos
+}
+
 fn declarar_riscos(run: &mut Run, c: &Composicao, aprovado_em: Option<String>) {
     let sem_classificacao: Vec<&str> = c
         .proposta
@@ -252,18 +267,18 @@ fn declarar_riscos(run: &mut Run, c: &Composicao, aprovado_em: Option<String>) {
 
 /// Tudo o que as duas fases calculam a partir do disco. Uma rota so: fases que
 /// montassem a proposta por caminhos diferentes nao poderiam ser comparadas.
-struct Composicao {
+pub(crate) struct Composicao {
     mapeamento: Mapeamento,
-    laudo: Laudo,
+    pub(crate) laudo: Laudo,
     catalogo: Catalogo,
-    proposta: Proposta,
+    pub(crate) proposta: Proposta,
     /// O contrato como ficaria. Ainda nao escrito em `contracts/`.
-    yaml_enriquecido: String,
+    pub(crate) yaml_enriquecido: String,
     /// Campos classificados sem propriedade correspondente no YAML.
     nao_aplicados: Vec<String>,
 }
 
-fn compor(run: &mut Run, fase: &str) -> Result<Composicao, String> {
+pub(crate) fn compor(run: &mut Run, fase: &str) -> Result<Composicao, String> {
     let c = f3_classificar::laudo_atual(run, "f4", fase)?;
     let (laudo, catalogo, mapeamento) = (c.laudo, c.catalogo, c.mapeamento);
 
@@ -299,7 +314,7 @@ fn compor(run: &mut Run, fase: &str) -> Result<Composicao, String> {
     })
 }
 
-fn gravar_proposta(run: &mut Run, c: &Composicao) -> Result<(), String> {
+pub(crate) fn gravar_proposta(run: &mut Run, c: &Composicao) -> Result<(), String> {
     let json = format!("evidence/{}/f4-proposta.json", run.tracer.run_id());
     let serializado =
         serializar(&c.proposta).map_err(|e| format!("serializando a proposta: {e:#}"))?;
@@ -355,7 +370,7 @@ fn conferir_contra_implement(run: &mut Run, c: &Composicao) -> Result<bool, Stri
 /// F1 ja garante que o contrato entra valido; este e o unico lugar onde ainda
 /// dava para quebrar o padrao — escrevendo nele. Fecha o criterio do
 /// `contexto.md` sobre a saida.
-fn lint_do_enriquecido(run: &mut Run) -> Result<Vec<String>, String> {
+pub(crate) fn lint_do_enriquecido(run: &mut Run) -> Result<Vec<String>, String> {
     let proposta = caminho_do_enriquecido(run);
     let destino = format!("evidence/{}/f4-lint-enriquecido.json", run.tracer.run_id());
 
@@ -450,7 +465,7 @@ fn aplicar_no_contrato(run: &mut Run, c: &Composicao) -> Outcome {
 /// versao existem de verdade — mesma `version` reclassificada por um catalogo
 /// novo sao duas constatacoes diferentes, e apagar a primeira destruiria
 /// justamente o que a auditoria quer comparar.
-fn caminho_do_laudo(contrato: &str, versao: &str, sha: &str) -> String {
+pub(crate) fn caminho_do_laudo(contrato: &str, versao: &str, sha: &str) -> String {
     // Ao lado do contrato, seja qual for a profundidade dele: `contracts/x/` ou
     // `contracts/<dominio>/<contrato>/` produzem `laudos/` no mesmo nivel do
     // `.yaml`, sem o harness precisar saber qual layout a organizacao adotou.
@@ -547,7 +562,7 @@ fn celula(s: &str) -> String {
 /// Pela mesma razao ele **nao registra a aprovacao**: o documento e a
 /// constatacao tecnica. Quem assina e o merge, e a revisao que o autorizou fica
 /// no historico, presa ao mesmo sha256 que esta aqui no cabecalho.
-fn documento_do_laudo(p: &Proposta, l: &Laudo, versao: &str, sha_final: &str) -> String {
+pub(crate) fn documento_do_laudo(p: &Proposta, l: &Laudo, versao: &str, sha_final: &str) -> String {
     let mut s = String::new();
 
     s.push_str("# Laudo de classificacao de privacidade\n\n");
@@ -857,7 +872,7 @@ impl Mudanca {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum TipoDeGate {
     Lacuna,
@@ -866,7 +881,9 @@ pub enum TipoDeGate {
 }
 
 impl TipoDeGate {
-    fn rotulo(self) -> &'static str {
+    /// Publico porque o renderizador do `check` desenha a mesma tabela para o
+    /// comentario do pull request.
+    pub fn rotulo(self) -> &'static str {
         match self {
             TipoDeGate::Lacuna => "lacuna",
             TipoDeGate::Reclassificacao => "reclassificacao",
@@ -875,7 +892,7 @@ impl TipoDeGate {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ItemDeGate {
     pub tipo: TipoDeGate,
     pub campo: String,
@@ -1121,7 +1138,7 @@ fn marcar(prop: &mut Value, c: &CampoClassificado) {
 
 // --- Proposta, veredito e relatorio ----------------------------------------------
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ResumoGate {
     pub campos: usize,
     pub classificados: usize,

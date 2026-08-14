@@ -1,0 +1,121 @@
+# Verificacao de contrato de dados em pull request.
+#
+# Este arquivo e deliberadamente burro. Ele nao decide nada: chama `./run.sh
+# check`, que produz um `report.json` neutro, e depois chama `./run.sh report`
+# para desenhar o mesmo relatorio nos formatos que o GitHub entende. Toda a
+# politica — o que reprova, o que abre gate, o que e so aviso — mora no binario,
+# testada em `cargo test`, e roda igual na maquina de quem desenvolve.
+#
+# E o que torna a porta para o Azure DevOps barata: la muda este arquivo e um
+# renderizador; o julgamento nao se move.
+#
+# O que este workflow NAO faz, de proposito:
+#   - nao escreve no contrato nem emite laudo. Ele so **propoe**, em artefato.
+#   - nao commita nada. Nao tem permissao de `contents: write`.
+#   - nao aprova gate. Quem libera e a revisao de CODEOWNER, via branch
+#     protection — nunca um job de CI.
+
+name: contrato
+
+on:
+  pull_request:
+    paths:
+      - 'contracts/**'
+      - 'glossary/**'
+      - 'classification/**'
+      - 'src/**'
+      - '.github/workflows/contrato-pr.yml'
+
+# Leitura no repositorio, escrita apenas no pull request (o comentario).
+# Sem `contents: write` o job nao consegue empurrar commit nem que queira.
+permissions:
+  contents: read
+  pull-requests: write
+
+# Push novo cancela a verificacao anterior do mesmo PR: comentario de um SHA
+# que ja nao e o atual engana mais do que informa.
+concurrency:
+  group: contrato-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # O toolchain sai de `rust-toolchain.toml` — o mesmo 1.95.0 que compila
+      # na maquina de quem desenvolve. `stable` aqui divergiria em silencio.
+      - uses: Swatinem/rust-cache@v2
+
+      # Idempotente, e confere o **digest** da imagem do datacontract-cli. Um
+      # contrato nao pode passar hoje e reprovar amanha sem nenhum commit.
+      - name: preparar ambiente
+        run: ./scripts/bootstrap.sh
+
+      # Uma unica execucao. 99,6% do custo medido deste harness e partida de
+      # container, entao desenhar tres vezes nao pode custar tres verificacoes:
+      # o resultado e gravado e os passos seguintes so redesenham.
+      - name: verificar contrato
+        id: check
+        run: |
+          set +e
+          ./run.sh check --formato github --saida "$RUNNER_TEMP/report.json"
+          codigo=$?
+          set -e
+          echo "codigo=$codigo" >> "$GITHUB_OUTPUT"
+
+      - name: resumo do job
+        if: always()
+        run: |
+          ./run.sh report "$RUNNER_TEMP/report.json" --formato markdown \
+            >> "$GITHUB_STEP_SUMMARY"
+
+      # `--edit-last` atualiza o comentario existente em vez de empilhar um por
+      # push. Se ainda nao houver nenhum, o primeiro comando falha e o segundo
+      # cria.
+      - name: comentar no pull request
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ github.event.pull_request.number }}
+        run: |
+          ./run.sh report "$RUNNER_TEMP/report.json" --formato markdown \
+            > "$RUNNER_TEMP/comentario.md"
+          gh pr comment "$PR" --body-file "$RUNNER_TEMP/comentario.md" --edit-last \
+            || gh pr comment "$PR" --body-file "$RUNNER_TEMP/comentario.md"
+
+      # O contrato enriquecido e o laudo propostos, mais o rastro do run. Nao
+      # sao commitados aqui: sao a materia-prima da sugestao que quem abriu o PR
+      # aceita.
+      - name: artefatos
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: contrato-${{ github.run_id }}
+          path: |
+            evidence/
+            trace/
+          retention-days: 30
+
+      # O veredito, traduzido para o que o GitHub entende como aprovado.
+      #
+      # `5` — gate aberto — **nao reprova o job**: nada esta errado no contrato,
+      # falta decisao humana, e reprovar diria a quem abriu o PR que ele errou.
+      # Quem segura o merge nesse caso e a branch protection exigindo revisao de
+      # CODEOWNER, que e a autoridade certa. Se voce quiser que o proprio check
+      # so fique verde depois da aprovacao, veja `.github/README.md`.
+      - name: veredito
+        run: |
+          case "${{ steps.check.outputs.codigo }}" in
+            0)
+              echo "contrato aprovado na verificacao automatica"
+              ;;
+            5)
+              echo "::notice::aguardando decisao humana — o merge fica com a revisao de CODEOWNER"
+              ;;
+            *)
+              echo "::error::verificacao reprovou (exit ${{ steps.check.outputs.codigo }})"
+              exit 1
+              ;;
+          esac

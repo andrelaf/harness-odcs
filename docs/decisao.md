@@ -111,11 +111,25 @@ precisou escrever ODCS de volta, e escrever é caro. Se houvesse uma quinta
 feature, eu cortaria escopo antes de escrever a primeira linha.
 
 **A verificação externa depende de exit code e de arquivo, não de parser.**
-`--json` existe em `status`, `doctor` e `metrics`, e é recusado nos comandos que
-mutam estado. Quem integra o harness em CI lê o exit code — `0`, `1`, `3`, `5` —
-e, se precisar do conteúdo, os arquivos em `state/` e `metrics/` já são JSON.
-A flag é conveniência de pipe, não capacidade nova, e vale saber disso antes de
-construir automação em cima dela.
+Quem integra o harness em CI lê o exit code — `0`, `1`, `3`, `5` — e, se
+precisar do conteúdo, os arquivos em `state/` e `metrics/` já são JSON. `--json`
+é recusado nos comandos que mutam estado, e nesses ele seria conveniência de
+pipe, não capacidade nova.
+
+A exceção é o `check`, e ela veio depois: o `report.json` é um contrato de saída
+versionado (`schema_version`), pensado para ser consumido por máquina, e é o
+único lugar onde a integração externa não é um efeito colateral do desenho.
+
+**A porta para o Azure DevOps está desenhada, não construída.** O CI aqui é
+GitHub Actions porque a PoC vive no GitHub. Numa organização, o destino é Azure
+DevOps, com **grupos do Entra ID (AD)** como aprovadores por política de branch
+em vez de times num `CODEOWNERS`. O custo estimado é um renderizador (~30
+linhas) e um `azure-pipelines.yml` equivalente ao workflow — a política, os exit
+codes e o `report.json` não mudam, e foi para isso que o relatório neutro existe
+no meio do caminho. O detalhe está em [`.github/README.md`](../.github/README.md).
+O risco real da migração não é técnico: é a separação entre o grupo que aprova o
+contrato e o que aprova o glossário e o catálogo, que aninhamento de grupos do
+AD desfaz sem que nenhuma tela pareça mal configurada.
 
 ## O que eu faria diferente
 
