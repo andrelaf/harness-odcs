@@ -160,12 +160,78 @@ rodar F4 de novo sem gerar diff, e o que faz o gate ficar quieto quando nada
 mudou: o contrato passa a declarar exatamente o que o catálogo diz, e não há
 divergência para reportar.
 
+## O laudo é o entregável, e não é evidência
+
+O contrato enriquecido carrega a **conclusão** — `classification`, `tags` — e
+não carrega o critério. Um contrato classificado não responde *por que* o campo
+recebeu aquele nível, contra qual versão de catálogo, nem o que ficou em aberto.
+Quem responde isso é o laudo, e ele é o documento que o time de governança de
+dados hoje escreve à mão.
+
+Por isso a base legal atravessa a cadeia inteira: `justificativa` e `referencia`
+nascem no catálogo, F3 as carrega em `CampoClassificado`, e F4 as leva até
+`CampoDoGate` sem tocá-las. O harness **transporta** a redação do encarregado de
+dados; não redige nem reescreve nenhuma delas.
+
+### Onde ele mora, e por quê
+
+```
+contracts/clientes/
+  contract.odcs.yaml            a fonte, e o destino do enriquecimento
+  laudos/
+    1.0.0-29e5a60.md            um laudo por (versão, sha256 do classificado)
+```
+
+Isto é uma **exceção deliberada** à regra da seção 6 da spec do harness, e a
+exceção tem critério: saída de ferramenta é *regenerável* — apago o HTML hoje,
+refaço amanhã, sai idêntico —, e por isso vive em `evidence/<run_id>/`. O laudo
+é *registro emitido*: tem critério vigente na data, e alguém responde por ele.
+Auditoria não aceita "conseguimos regerar"; pede o documento. Ele fica
+versionado, ao lado do contrato a que se refere, e entra no mesmo commit.
+
+O nome leva **versão do contrato + sha256 do contrato classificado**. A versão
+para uma pessoa achar; o sha para não sobrescrever. Dois laudos da mesma
+`version` existem de verdade — a mesma versão reclassificada por um catálogo
+novo são duas constatações diferentes, e apagar a primeira destruiria justamente
+o que a auditoria quer comparar.
+
+O sha é o do contrato **classificado**, não o da entrada: é o arquivo que fica
+no repositório ao lado do laudo, então quem audita confere a correspondência com
+qualquer ferramenta de hash, sem depender deste projeto.
+
+### O que o laudo não tem
+
+**Data no corpo.** O documento é determinístico: mesmo contrato, mesmo glossário
+e mesmo catálogo produzem o mesmo arquivo byte a byte — reemitir nunca gera
+diff, e `verify` pode conferi-lo como confere todo o resto. A data de emissão é
+a do commit, e o Git já é a autoridade de tempo aqui. Um carimbo no corpo faria
+o arquivo mudar sem que a análise tivesse mudado.
+
+**Aprovação.** O laudo é a constatação técnica; quem assina é o merge. A revisão
+que o autorizou fica no histórico, presa ao mesmo sha256 do cabeçalho.
+
+### A base legal não entra no hash do gate
+
+`hash_do_gate` continua sendo calculado só sobre os itens de gate. A
+justificativa e a referência ficam de fora de propósito: o pedido é sobre **o
+que** se decide, não sobre a redação do porquê. Se entrassem, corrigir uma
+vírgula na justificativa de um termo invalidaria aprovações que ninguém pediu
+para revisar.
+
+### Ordem de escrita
+
+Contrato primeiro, laudo depois. O laudo carrega o sha256 do contrato
+classificado, então a ordem decide como fica o repositório se a segunda escrita
+falhar: contrato escrito e laudo faltando é uma ausência — visível, e o run
+seguinte emite. Laudo escrito e contrato faltando seria um documento afirmando
+um sha256 que não está em lugar nenhum. Laudo errado é pior que laudo ausente.
+
 ## Divisão entre as fases
 
 | Fase | Faz |
 |---|---|
 | `implement` | Recompõe a classificação, lê o que o contrato declara, grava a proposta e o contrato enriquecido em `evidence/`, monta o pedido de gate. Com pendência não aprovada: grava `state/gate-pendente.json` e devolve **`Blocked`**. |
-| `verify` | **Refaz tudo do zero**, confere cobertura, gate e aplicabilidade, roda `lint` sobre a proposta, grava o relatório e **aplica** o enriquecimento no contrato. |
+| `verify` | **Refaz tudo do zero**, confere cobertura, gate e aplicabilidade, roda `lint` sobre a proposta, grava o relatório, **aplica** o enriquecimento no contrato e **emite o laudo**. |
 
 Mesmo desenho de F1, F2 e F3: `verify` não lê a proposta como insumo — o que
 mantém `./run.sh verify` válido sozinho e dá de graça a comparação byte a byte
@@ -203,6 +269,10 @@ lugar onde ele ainda podia quebrar.
 
 Nenhum carrega valor de dado. A trave de privacidade da spec do harness
 (seção 6) vale sem exceção.
+
+Fora desta tabela, e de propósito: `contracts/<contrato>/laudos/<versão>-<sha>.md`
+— o laudo. Não é evidência de execução, é entregável versionado, e o motivo está
+em [O laudo é o entregável](#o-laudo-é-o-entregável-e-não-é-evidência).
 
 ## Funções puras e testes
 

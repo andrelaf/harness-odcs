@@ -20,6 +20,14 @@ pub struct Run {
     pub progress: Progress,
     pub tracer: Tracer,
     pub feature_id: String,
+    /// O contrato que este run opera, relativo a raiz e sempre com `/`.
+    ///
+    /// Resolvido uma vez, na abertura do run, e nao reconsultado depois: as
+    /// fases de dominio precisam concordar sobre qual arquivo estao lendo,
+    /// classificando e escrevendo. Um `descobrir` por fase deixaria `implement`
+    /// e `verify` trabalhando em contratos diferentes se um arquivo aparecesse
+    /// no meio do run.
+    pub contrato: String,
     pub evidence_dir: PathBuf,
     pub tool_seq: u32,
     /// Linhas para o operador, impressas pela fase corrente.

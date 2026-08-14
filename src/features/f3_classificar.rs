@@ -646,7 +646,9 @@ fn serializar(l: &Laudo) -> Result<String> {
     serde_json::to_string_pretty(l).context("serializando a classificacao")
 }
 
-fn niveis_legivel(por_nivel: &BTreeMap<String, usize>) -> String {
+/// Publica porque o laudo de F4 mostra a mesma contagem. Duas formatacoes da
+/// mesma coisa divergiriam na primeira vez que uma delas ganhasse um nivel novo.
+pub fn niveis_legivel(por_nivel: &BTreeMap<String, usize>) -> String {
     if por_nivel.is_empty() {
         return "-".to_string();
     }
@@ -657,7 +659,10 @@ fn niveis_legivel(por_nivel: &BTreeMap<String, usize>) -> String {
         .join(", ")
 }
 
-fn sim_nao(v: Option<bool>) -> &'static str {
+/// `None` e travessao, e nao "nao": o campo nao foi decidido, e escrever "nao"
+/// ali afirmaria que ele nao e PII. Publica pelo mesmo motivo de
+/// `niveis_legivel` — o laudo de F4 responde a mesma pergunta.
+pub fn sim_nao(v: Option<bool>) -> &'static str {
     match v {
         Some(true) => "sim",
         Some(false) => "nao",
@@ -731,6 +736,10 @@ fn markdown(l: &Laudo) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// O contrato dos testes. Antes era `contrato::CAMINHO`; agora que o alvo e
+    /// resolvido por run, o valor entra por parametro tambem aqui.
+    const ALVO: &str = "contracts/clientes/contract.odcs.yaml";
     use crate::features::contrato::Campo;
     use crate::features::f2_mapear::{Glossario, carregar_glossario, mapear};
 
@@ -804,7 +813,7 @@ classificacoes:
                 tipo: "string".to_string(),
             })
             .collect();
-        let m = mapear(&campos, &glossario(), "sha-c", "sha-g");
+        let m = mapear(ALVO, &campos, &glossario(), "sha-c", "sha-g");
         let cat = catalogo();
         let l = classificar(&m, &cat, "sha-cat");
         (m, l, cat)

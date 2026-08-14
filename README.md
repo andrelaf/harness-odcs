@@ -134,6 +134,30 @@ Nada foi escrito no contrato. Quem decide lê o pedido e libera:
 
 **A aprovação vale para aquele conteúdo, não para a feature.** Ela é gravada pelo hash dos itens submetidos: se o contrato, o glossário ou o catálogo mudarem, o pedido é outro, o hash é outro e o gate fecha de novo. Sem isso, aprovar uma lacuna hoje liberaria em silêncio a despromoção de um campo PII amanhã.
 
+### O mesmo julgamento, num pull request
+
+`next` **escreve**: aplica o enriquecimento, emite o laudo, commita. Isso serve a quem está trabalhando no contrato e não serve a um pull request — três PRs abertos disputariam `state/progress.json`, e cada run de CI viraria um commit conflitando com os outros dois.
+
+`check` responde à mesma pergunta sem nenhuma dessas consequências:
+
+```bash
+./run.sh check                      # veredito, sem escrever fora de evidence/ e trace/
+./run.sh check --formato markdown   # o comentário que o PR receberia
+./run.sh check --json               # o report.json, neutro de plataforma
+```
+
+Ele calcula tudo — nome, lint, mapeamento, classificação, gate, contrato enriquecido e laudo — e **não toca o contrato, não toca `state/`, não commita**. O que sairia escrito fica em `evidence/`, como proposta. E não reimplementa regra nenhuma: chama as mesmas funções que as fases chamam, para que o CI e a máquina de quem desenvolve não possam discordar sobre o mesmo contrato.
+
+`state/aprovacoes.json` é **ignorado** aqui, de propósito: o arquivo está no repositório e quem abriu o PR pode commitá-lo, então respeitá-lo seria auto-aprovação. Num pull request, quem tem autoridade sobre o gate é a revisão de CODEOWNER — o `check` reporta a pendência e nunca a libera.
+
+O veredito viaja no exit code: `0` passou, `1` reprovou, `5` bloqueado aguardando decisão humana. **`5` não reprova o PR** — nada está errado no contrato, falta decisão, e marcar vermelho diria a quem abriu que ele errou. Quem segura o merge é a branch protection.
+
+O workflow em [`.github/workflows/contrato-pr.yml`](.github/workflows/contrato-pr.yml) é deliberadamente burro: chama `check`, grava o `report.json` e depois só o **redesenha** em anotação, comentário e resumo. Uma verificação, três desenhos — 99,6% do custo é partida de container, então desenhar três vezes não pode custar três verificações.
+
+Uma branch por entrega, nascida da `main`, e o **pull request para `main` é o gatilho** — nada acontece por push direto. A convenção de nome (`<tipo>/<aaaamm>/<descrição>`) é verificada no CI e está em [`docs/git-flow.md`](docs/git-flow.md).
+
+**Setup, portabilidade e a variante mais estrita estão em [`.github/README.md`](.github/README.md).** É lá também que está registrado o destino previsto fora desta PoC: **Azure DevOps, com grupos do Entra ID (AD) como aprovadores** por política de branch. A porta custa um renderizador e um YAML — a política, os exit codes e o `report.json` não se movem.
+
 ---
 
 ## Medição
@@ -299,6 +323,9 @@ Semana 4 de 4. As quatro features rodam de ponta a ponta, a medição é derivad
 | F3 · Classificar — [spec](docs/spec-f3-classificar.md) | pronta · catálogo LGPD em campos ODCS |
 | F4 · Gate + relatório — [spec](docs/spec-f4-gate.md) | pronta · contrato enriquecido, lacunas e pausa humana |
 | Medição (custo, duração, erros) | pronta · `./run.sh metrics`, derivada do trace |
+| Verificação em pull request — [`.github/`](.github/README.md) | pronta · `./run.sh check`, workflow e CODEOWNERS |
+| [`docs/git-flow.md`](docs/git-flow.md) — branch, PR e merge | pronto · convenção verificada no CI |
+| Azure DevOps com grupos do AD como aprovadores | **previsto, não construído** · porta descrita em [`.github/README.md`](.github/README.md#portar-para-azure-devops) |
 | [`docs/decisao.md`](docs/decisao.md) — onde se paga e onde perde | pronto |
 | [`docs/demo.md`](docs/demo.md) — roteiro ensaiado, 10 min | pronto |
 
@@ -321,14 +348,19 @@ Semana 4 de 4. As quatro features rodam de ponta a ponta, a medição é derivad
 ./run.sh status --json     # progresso e lista de features
 ./run.sh doctor --json     # PASS/FAIL por item de ambiente
 ./run.sh metrics --json    # runs e resumo, sem abrir o arquivo
+./run.sh check --json      # o veredito do contrato — é o que o CI consome
+./run.sh report <arquivo> --json
 ```
 
-Vale para os três comandos cuja saída é relatório. Nos que mutam estado (`next`, `approve`, `reset`) a flag é **recusada com exit `2`** — a saída deles é narrativa de progresso, não dado, e uma flag silenciosamente sem efeito engana mais que uma recusa. O exit code continua sendo o veredito nos dois formatos.
+Vale para os comandos cuja saída **é** relatório. Nos que mutam estado (`next`, `approve`, `reset`) a flag é **recusada com exit `2`** — a saída deles é narrativa de progresso, não dado, e uma flag silenciosamente sem efeito engana mais que uma recusa. O exit code continua sendo o veredito nos dois formatos.
+
+O `report.json` do `check` tem `schema_version` próprio e é o ponto de integração estável: é dele que saem as anotações, o comentário do PR e o resumo do job, e é ele que outro CI leria sem precisar de expressão regular sobre texto de console.
 
 ## Estrutura do repositório
 
 ```
 run.sh                    ponto de entrada único
+.github/                  verificação em pull request — workflow, CODEOWNERS e o guia de setup
 scripts/                  despachantes de ambiente (bootstrap, doctor, editor, ci)
 src/                      o harness em Rust — fluxo, estado, trace, fases
 tests/                    tabela de transições: ordem, teto, halt
@@ -339,5 +371,5 @@ state/                    feature-list.json, progress.json, gate-pendente.json, 
 trace/                    <run_id>.jsonl, append-only
 metrics/                  metrics.jsonl — derivado de trace/, regenerável
 evidence/                 saída bruta das ferramentas, por run
-docs/                     brief, contexto, specs, decisão e roteiro de demo
+docs/                     brief, contexto, specs, git flow, decisão e roteiro de demo
 ```

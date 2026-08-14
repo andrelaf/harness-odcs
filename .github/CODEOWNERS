@@ -1,0 +1,36 @@
+# Quem responde por cada parte do repositorio.
+#
+# Este arquivo e o que faz a aprovacao ser **mecanica** em vez de social: com
+# `Require review from Code Owners` ligado na branch protection, o GitHub
+# escolhe o revisor pelo caminho do arquivo, e o merge nao acontece sem ele.
+#
+# Substitua os times pelos da sua organizacao. Time que nao existe nao bloqueia
+# nada — e a falha mais silenciosa deste arquivo.
+
+# Padrao. Sem uma linha coringa, caminho nao coberto nao exige revisor nenhum.
+*                       @sua-org/plataforma-dados
+
+# --- O criterio nao e de quem escreve o contrato ------------------------------
+#
+# Se o autor do contrato puder alterar o glossario ou o catalogo no mesmo PR,
+# ele fecha a propria lacuna e reclassifica o proprio campo. O gate inteiro do
+# F4 depende de estes dois serem artefatos que o autor NAO controla.
+#
+# O ideal e que morem em outro repositorio, consumidos por versao fixada.
+# Enquanto estiverem aqui, sao donos distintos — e vale um check que reprove
+# PR que toque contrato e catalogo ao mesmo tempo.
+/glossary/              @sua-org/data-stewards
+/classification/        @sua-org/privacidade @sua-org/encarregado-dados
+
+# --- Um dono por dominio de dado ---------------------------------------------
+#
+# E este nivel que justifica `contracts/<dominio>/<contrato>/`. Sem ele, ou uma
+# pessoa aprova todo contrato da empresa, ou esta lista cresce um item por
+# contrato ate ninguem mais manter.
+/contracts/clientes/    @sua-org/dominio-clientes
+# /contracts/pagamentos/  @sua-org/dominio-pagamentos
+# /contracts/credito/     @sua-org/dominio-credito
+
+# --- O harness ---------------------------------------------------------------
+/src/                   @sua-org/plataforma-dados
+/.github/               @sua-org/plataforma-dados

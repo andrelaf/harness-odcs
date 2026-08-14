@@ -1,0 +1,6 @@
+# comando: docker run --rm -v C:/repos/harness-odcs:/home/datacontract datacontract/cli:1.1.0 export jsonschema contracts/pagamentos/transacoes/contract.odcs.yaml --output evidence/20260814T162635Z-ecebec/f4-campos-verify.json
+# --- stdout ---
+Error: Export to ExportFormat.jsonschema requires schema in the data contract.
+Pass --debug (or set DATACONTRACT_CLI_DEBUG=1) for the full traceback.
+
+# --- stderr ---

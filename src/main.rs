@@ -6,9 +6,11 @@
 
 use anyhow::{Context, Result};
 use clap::{Parser, Subcommand};
+use harness::check;
 use harness::checks;
 use harness::config::Config;
 use harness::exit::Exit;
+use harness::features::contrato;
 use harness::flow::{self, HaltReason, Outcome, Phase, Transition};
 use harness::metrics;
 use harness::phases::{self, Run};
@@ -38,10 +40,20 @@ struct Cli {
     #[arg(long = "dry-run", global = true)]
     dry_run: bool,
 
-    /// Saida legivel por maquina, em stdout. Vale para `status`, `doctor` e
-    /// `metrics`; nos demais e recusada.
+    /// Saida legivel por maquina, em stdout. Vale para os comandos cuja saida
+    /// **e** relatorio — `status`, `doctor`, `metrics`, `check` e `report`;
+    /// nos que mutam estado e recusada.
     #[arg(long, global = true)]
     json: bool,
+
+    /// Qual contrato operar, relativo a raiz — por exemplo
+    /// `contracts/clientes/contract.odcs.yaml`.
+    ///
+    /// Dispensavel enquanto houver um unico contrato no repositorio. Com dois
+    /// ou mais, passa a ser obrigatoria: o harness recusa e lista, em vez de
+    /// escolher por voce qual contrato classificar.
+    #[arg(long, global = true, value_name = "CAMINHO")]
+    contrato: Option<String>,
 }
 
 #[derive(Subcommand)]
@@ -50,6 +62,25 @@ enum Cmd {
     Plan,
     /// Executa a proxima feature pelo fluxo.
     Next,
+    /// Verifica um contrato sem escrever nada — o que o CI roda.
+    Check {
+        /// Como desenhar o resultado. A politica e a mesma nos quatro: muda so
+        /// quem le. `github` emite anotacoes de workflow; `markdown`, o corpo
+        /// do comentario do pull request.
+        #[arg(long, value_enum, default_value_t = Formato::Texto)]
+        formato: Formato,
+        /// Grava o relatorio tambem neste caminho, alem de `evidence/`. E por
+        /// ele que o `report` desenha depois, sem reexecutar a verificacao.
+        #[arg(long, value_name = "ARQUIVO")]
+        saida: Option<String>,
+    },
+    /// Desenha um relatorio ja produzido pelo `check`, sem reexecuta-lo.
+    Report {
+        /// O `report.json` gravado por `check --saida`.
+        arquivo: String,
+        #[arg(long, value_enum, default_value_t = Formato::Texto)]
+        formato: Formato,
+    },
     /// Mostra onde o trabalho parou.
     Status,
     /// Re-executa apenas a fase `verify`.
@@ -81,19 +112,33 @@ fn main() {
     // mutam estado a saida e narrativa de progresso, e serializa-la produziria
     // um JSON que ninguem consome. Recusar em voz alta e melhor que aceitar e
     // ignorar: flag silenciosamente sem efeito e a pior das tres opcoes.
-    if cli.json && !matches!(cli.cmd, Cmd::Status | Cmd::Doctor | Cmd::Metrics) {
+    if cli.json
+        && !matches!(
+            cli.cmd,
+            Cmd::Status | Cmd::Doctor | Cmd::Metrics | Cmd::Check { .. } | Cmd::Report { .. }
+        )
+    {
         eprintln!(
-            "--json vale para `status`, `doctor` e `metrics`; os demais comandos nao o aceitam"
+            "--json vale para `status`, `doctor`, `metrics`, `check` e `report`; os demais \
+             comandos nao o aceitam"
         );
         std::process::exit(Exit::Usage.code());
     }
 
     let result = match &cli.cmd {
         Cmd::Plan => cmd_plan(&cfg),
-        Cmd::Next => cmd_next(&cfg, cli.step, cli.dry_run),
+        Cmd::Next => cmd_next(&cfg, cli.step, cli.dry_run, cli.contrato.as_deref()),
+        Cmd::Check { formato, saida } => cmd_check(
+            &cfg,
+            cli.contrato.as_deref(),
+            *formato,
+            saida.as_deref(),
+            cli.json,
+        ),
+        Cmd::Report { arquivo, formato } => cmd_report(&cfg, arquivo, *formato, cli.json),
         Cmd::Status => cmd_status(&cfg, cli.json),
-        Cmd::Verify => cmd_single(&cfg, Phase::Verify),
-        Cmd::Handoff => cmd_single(&cfg, Phase::Handoff),
+        Cmd::Verify => cmd_single(&cfg, Phase::Verify, cli.contrato.as_deref()),
+        Cmd::Handoff => cmd_single(&cfg, Phase::Handoff, cli.contrato.as_deref()),
         Cmd::Doctor => cmd_doctor(&cfg, cli.json),
         Cmd::Metrics => cmd_metrics(&cfg, cli.json),
         Cmd::Approve { feature } => cmd_approve(&cfg, feature),
@@ -107,6 +152,67 @@ fn main() {
             std::process::exit(Exit::BadState.code());
         }
     }
+}
+
+#[derive(Copy, Clone, PartialEq, Eq, clap::ValueEnum)]
+enum Formato {
+    Texto,
+    Json,
+    Github,
+    Markdown,
+}
+
+/// `check` — verificacao efemera, sem escrita fora de `evidence/` e `trace/`.
+///
+/// `--json` e legitimo aqui, e nao recusado como em `next`: a saida do `check`
+/// **e** um relatorio, e e ela que o CI consome. Vale como atalho de
+/// `--formato json`.
+fn cmd_check(
+    cfg: &Config,
+    escolha: Option<&str>,
+    formato: Formato,
+    saida: Option<&str>,
+    json: bool,
+) -> Result<i32> {
+    let r = check::executar(cfg, escolha)?;
+    if let Some(p) = saida {
+        fs::write(p, serde_json::to_string_pretty(&r)?)
+            .with_context(|| format!("escrevendo o relatorio em {p}"))?;
+    }
+    let formato = if json { Formato::Json } else { formato };
+
+    desenhar(cfg, &r, formato)?;
+    Ok(r.veredito.exit().code())
+}
+
+/// Desenha um relatorio ja produzido. **Sai sempre com `0`**: um renderizador
+/// que reprova confunde o veredito do contrato com o sucesso do desenho. Quem
+/// carrega o veredito e o `check`, e o `exit_code` esta dentro do proprio JSON.
+fn cmd_report(cfg: &Config, arquivo: &str, formato: Formato, json: bool) -> Result<i32> {
+    let r = check::ler(Path::new(arquivo))?;
+    desenhar(cfg, &r, if json { Formato::Json } else { formato })?;
+    Ok(Exit::Pass.code())
+}
+
+/// Uma rota so para desenhar, usada por `check` e por `report`. Duas rotas
+/// fariam o comentario do pull request divergir do que o `check` imprime.
+fn desenhar(cfg: &Config, r: &check::Relatorio, formato: Formato) -> Result<()> {
+    match formato {
+        Formato::Json => println!("{}", serde_json::to_string_pretty(r)?),
+        Formato::Texto => check::imprimir(r),
+        Formato::Github => print!("{}", check::github(r)),
+        Formato::Markdown => {
+            // O laudo entra no corpo do comentario, e nao so como link: e ele
+            // que o revisor precisa ler antes de aprovar.
+            let laudo = r
+                .propostas
+                .laudo
+                .as_ref()
+                .and_then(|p| fs::read_to_string(cfg.root.join(p)).ok());
+            print!("{}", check::markdown(r, laudo.as_deref()));
+        }
+    }
+    Ok(())
 }
 
 fn cmd_plan(cfg: &Config) -> Result<i32> {
@@ -495,7 +601,7 @@ fn cmd_reset(cfg: &Config, feature_id: &str) -> Result<i32> {
 
 /// Executa uma unica fase fora do laco. Serve a `verify` e `handoff`, que a
 /// spec expoe como re-executaveis para producao de evidencia.
-fn cmd_single(cfg: &Config, phase: Phase) -> Result<i32> {
+fn cmd_single(cfg: &Config, phase: Phase, escolha: Option<&str>) -> Result<i32> {
     let fl_path = cfg.feature_list_path();
     let pr_path = cfg.progress_path();
     let mut features = FeatureList::load_or_seed(&fl_path)?;
@@ -532,6 +638,7 @@ fn cmd_single(cfg: &Config, phase: Phase) -> Result<i32> {
         progress: progress.clone(),
         tracer,
         feature_id: feature.id.clone(),
+        contrato: contrato::resolver(&cfg.root, escolha)?,
         evidence_dir,
         tool_seq: 0,
         notes: Vec::new(),
@@ -609,7 +716,7 @@ fn cmd_single(cfg: &Config, phase: Phase) -> Result<i32> {
     })
 }
 
-fn cmd_next(cfg: &Config, step_mode: bool, dry_run: bool) -> Result<i32> {
+fn cmd_next(cfg: &Config, step_mode: bool, dry_run: bool, escolha: Option<&str>) -> Result<i32> {
     let fl_path = cfg.feature_list_path();
     let pr_path = cfg.progress_path();
 
@@ -676,6 +783,7 @@ fn cmd_next(cfg: &Config, step_mode: bool, dry_run: bool) -> Result<i32> {
         progress,
         tracer,
         feature_id: feature.id.clone(),
+        contrato: contrato::resolver(&cfg.root, escolha)?,
         evidence_dir,
         tool_seq: 0,
         notes: Vec::new(),
