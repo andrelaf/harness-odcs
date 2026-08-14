@@ -15,6 +15,7 @@
 //! Sobra `implement` fino, e isso e honesto: F1 e uma feature de verificacao. O
 //! trabalho dela **e** o veredito.
 
+use crate::features::contrato;
 use crate::flow::Outcome;
 use crate::phases::Run;
 use crate::tools::{self, ToolOutcome};
@@ -22,22 +23,15 @@ use anyhow::{Context, Result};
 use serde::Deserialize;
 use std::fs;
 
-/// Caminho relativo a raiz do repositorio.
-///
-/// Uma string, dois usos: no host resolve com `root.join(...)`; no container
-/// vai como esta, porque a raiz e montada em `/home/datacontract`, que e o
-/// diretorio de trabalho do CLI. Traduzir caminho em dois lugares e onde esse
-/// tipo de codigo costuma quebrar entre sistemas.
-const CONTRATO: &str = "contracts/clientes/contract.odcs.yaml";
-
 /// Resolve o contrato e registra a identidade do que sera validado.
 pub fn implement(run: &mut Run) -> Outcome {
-    let host = run.cfg.root.join(CONTRATO);
+    let alvo = run.contrato.clone();
+    let host = run.cfg.root.join(&alvo);
     let raw = match fs::read_to_string(&host) {
         Ok(s) => s,
         Err(e) => {
             return Outcome::Fail(format!(
-                "contrato `{CONTRATO}` ilegivel em {} ({e})",
+                "contrato `{alvo}` ilegivel em {} ({e})",
                 host.display()
             ));
         }
@@ -47,7 +41,7 @@ pub fn implement(run: &mut Run) -> Outcome {
     // diferentes nao teriam como provar se o contrato mudou entre eles.
     let sha = tools::sha256_hex(&raw);
     run.note(format!(
-        "contrato {CONTRATO} — {} bytes, sha256 {}",
+        "contrato {alvo} — {} bytes, sha256 {}",
         raw.len(),
         &sha[..16]
     ));
@@ -62,6 +56,20 @@ pub fn verify(run: &mut Run) -> Outcome {
         return Outcome::Fail(format!("criando {}: {e}", run.evidence_dir.display()));
     }
 
+    // A convencao de nome e conferida antes do container: e barata, e um nome
+    // errado nao melhora com o lint passando. Os defeitos dos dois sao juntados
+    // e reportados de uma vez — quem abriu o PR precisa ver tudo agora, e nao
+    // descobrir um problema novo a cada push.
+    let alvo = run.contrato.clone();
+    let mut defeitos = contrato::defeitos_do_caminho(&alvo);
+    match fs::read_to_string(run.cfg.root.join(&alvo)) {
+        Ok(bruto) => defeitos.extend(contrato::defeitos_da_identidade(&alvo, &bruto)),
+        Err(e) => defeitos.push(format!("contrato `{alvo}` ilegivel ({e})")),
+    }
+    for aviso in contrato::avisos_do_caminho(&alvo) {
+        run.note(format!("  aviso — {aviso}"));
+    }
+
     // O exit code do CLI ja separa valido de invalido. Ainda assim o veredito
     // e lido do JSON: e ele que carrega o motivo, e um FAIL sem motivo nao e
     // evidencia de nada.
@@ -69,7 +77,7 @@ pub fn verify(run: &mut Run) -> Outcome {
         "verify-lint",
         &[
             "lint",
-            CONTRATO,
+            &alvo,
             "--output-format",
             "json",
             "--output",
@@ -103,29 +111,36 @@ pub fn verify(run: &mut Run) -> Outcome {
     ));
 
     if veredito.passed && saida.ok() {
-        relatorio_legivel(run)
+        // Nada a somar: o contrato e valido contra o padrao.
     } else if veredito.failures.is_empty() {
         // Veredito e exit code discordando e defeito de integracao, nao
         // contrato invalido — e vale dizer isso em vez de um FAIL mudo.
-        Outcome::Fail(format!(
+        defeitos.push(format!(
             "lint saiu com {} sem check reprovado no relatorio",
             saida.exit_code
-        ))
+        ));
     } else {
-        for f in &veredito.failures {
-            run.note(format!("  reprovado — {f}"));
-        }
-        Outcome::Fail(veredito.failures.join("; "))
+        defeitos.extend(veredito.failures.iter().cloned());
     }
+
+    if !defeitos.is_empty() {
+        for d in &defeitos {
+            run.note(format!("  reprovado — {d}"));
+        }
+        return Outcome::Fail(defeitos.join("; "));
+    }
+
+    relatorio_legivel(run)
 }
 
 /// O relatorio que uma pessoa consegue abrir. Roda depois do veredito: o
 /// exportador tambem valida, e um contrato reprovado nao chega ate aqui.
 fn relatorio_legivel(run: &mut Run) -> Outcome {
     let destino = format!("evidence/{}/f1-relatorio.html", run.tracer.run_id());
+    let alvo = run.contrato.clone();
     match run.datacontract(
         "verify-relatorio",
-        &["export", "html", CONTRATO, "--output", &destino],
+        &["export", "html", &alvo, "--output", &destino],
     ) {
         Ok(o) if o.ok() => {
             run.note(format!("relatorio {destino}"));

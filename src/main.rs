@@ -9,6 +9,7 @@ use clap::{Parser, Subcommand};
 use harness::checks;
 use harness::config::Config;
 use harness::exit::Exit;
+use harness::features::contrato;
 use harness::flow::{self, HaltReason, Outcome, Phase, Transition};
 use harness::metrics;
 use harness::phases::{self, Run};
@@ -42,6 +43,15 @@ struct Cli {
     /// `metrics`; nos demais e recusada.
     #[arg(long, global = true)]
     json: bool,
+
+    /// Qual contrato operar, relativo a raiz — por exemplo
+    /// `contracts/clientes/contract.odcs.yaml`.
+    ///
+    /// Dispensavel enquanto houver um unico contrato no repositorio. Com dois
+    /// ou mais, passa a ser obrigatoria: o harness recusa e lista, em vez de
+    /// escolher por voce qual contrato classificar.
+    #[arg(long, global = true, value_name = "CAMINHO")]
+    contrato: Option<String>,
 }
 
 #[derive(Subcommand)]
@@ -90,10 +100,10 @@ fn main() {
 
     let result = match &cli.cmd {
         Cmd::Plan => cmd_plan(&cfg),
-        Cmd::Next => cmd_next(&cfg, cli.step, cli.dry_run),
+        Cmd::Next => cmd_next(&cfg, cli.step, cli.dry_run, cli.contrato.as_deref()),
         Cmd::Status => cmd_status(&cfg, cli.json),
-        Cmd::Verify => cmd_single(&cfg, Phase::Verify),
-        Cmd::Handoff => cmd_single(&cfg, Phase::Handoff),
+        Cmd::Verify => cmd_single(&cfg, Phase::Verify, cli.contrato.as_deref()),
+        Cmd::Handoff => cmd_single(&cfg, Phase::Handoff, cli.contrato.as_deref()),
         Cmd::Doctor => cmd_doctor(&cfg, cli.json),
         Cmd::Metrics => cmd_metrics(&cfg, cli.json),
         Cmd::Approve { feature } => cmd_approve(&cfg, feature),
@@ -495,7 +505,7 @@ fn cmd_reset(cfg: &Config, feature_id: &str) -> Result<i32> {
 
 /// Executa uma unica fase fora do laco. Serve a `verify` e `handoff`, que a
 /// spec expoe como re-executaveis para producao de evidencia.
-fn cmd_single(cfg: &Config, phase: Phase) -> Result<i32> {
+fn cmd_single(cfg: &Config, phase: Phase, escolha: Option<&str>) -> Result<i32> {
     let fl_path = cfg.feature_list_path();
     let pr_path = cfg.progress_path();
     let mut features = FeatureList::load_or_seed(&fl_path)?;
@@ -532,6 +542,7 @@ fn cmd_single(cfg: &Config, phase: Phase) -> Result<i32> {
         progress: progress.clone(),
         tracer,
         feature_id: feature.id.clone(),
+        contrato: contrato::resolver(&cfg.root, escolha)?,
         evidence_dir,
         tool_seq: 0,
         notes: Vec::new(),
@@ -609,7 +620,7 @@ fn cmd_single(cfg: &Config, phase: Phase) -> Result<i32> {
     })
 }
 
-fn cmd_next(cfg: &Config, step_mode: bool, dry_run: bool) -> Result<i32> {
+fn cmd_next(cfg: &Config, step_mode: bool, dry_run: bool, escolha: Option<&str>) -> Result<i32> {
     let fl_path = cfg.feature_list_path();
     let pr_path = cfg.progress_path();
 
@@ -676,6 +687,7 @@ fn cmd_next(cfg: &Config, step_mode: bool, dry_run: bool) -> Result<i32> {
         progress,
         tracer,
         feature_id: feature.id.clone(),
+        contrato: contrato::resolver(&cfg.root, escolha)?,
         evidence_dir,
         tool_seq: 0,
         notes: Vec::new(),

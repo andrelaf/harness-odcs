@@ -73,7 +73,13 @@ pub fn verify(run: &mut Run) -> Outcome {
     };
 
     let mut defeitos = defeitos_do_glossario(&glossario);
-    let mapeamento = mapear(&campos, &glossario, &contrato_sha, &gloss_sha);
+    let mapeamento = mapear(
+        &run.contrato.clone(),
+        &campos,
+        &glossario,
+        &contrato_sha,
+        &gloss_sha,
+    );
     defeitos.extend(conferir_cobertura(&campos, &mapeamento, &glossario));
 
     // A comparacao com a proposta de `implement` so existe quando as duas
@@ -199,7 +205,13 @@ pub fn mapeamento_atual(run: &mut Run, feature: &str, fase: &str) -> Result<Mape
         glossario.termos.len(),
         &gloss_sha[..16]
     ));
-    Ok(mapear(&campos, &glossario, &contrato_sha, &gloss_sha))
+    Ok(mapear(
+        &run.contrato.clone(),
+        &campos,
+        &glossario,
+        &contrato_sha,
+        &gloss_sha,
+    ))
 }
 
 /// O glossario do disco, com o sha256 do que foi lido. Publica porque F3
@@ -398,7 +410,11 @@ pub struct Mapeamento {
 }
 
 /// Funcao pura: campos + glossario -> uma decisao por campo.
+///
+/// `contrato` vem por parametro, e nao de uma constante, porque o repositorio
+/// tem N contratos: o artefato precisa dizer a qual deles se refere.
 pub fn mapear(
+    contrato: &str,
     campos: &[Campo],
     glossario: &Glossario,
     contrato_sha: &str,
@@ -443,7 +459,7 @@ pub fn mapear(
         .count();
 
     Mapeamento {
-        contrato: contrato::CAMINHO.to_string(),
+        contrato: contrato.to_string(),
         contrato_sha256: contrato_sha.to_string(),
         glossario: GLOSSARIO.to_string(),
         glossario_versao: glossario.version.clone(),
@@ -604,6 +620,10 @@ fn markdown(m: &Mapeamento) -> String {
 mod tests {
     use super::*;
 
+    /// O contrato dos testes. Antes era `contrato::CAMINHO`; agora que o alvo e
+    /// resolvido por run, o valor entra por parametro tambem aqui.
+    const ALVO: &str = "contracts/clientes/contract.odcs.yaml";
+
     fn glossario_exemplo() -> Glossario {
         carregar_glossario(
             r#"
@@ -717,7 +737,7 @@ termos:
     #[test]
     fn termo_nao_usado_nao_e_defeito() {
         let g = glossario_exemplo();
-        let m = mapear(&[campo("cpf")], &g, "sha-c", "sha-g");
+        let m = mapear(ALVO, &[campo("cpf")], &g, "sha-c", "sha-g");
         assert!(defeitos_do_glossario(&g).is_empty());
         assert!(conferir_cobertura(&[campo("cpf")], &m, &g).is_empty());
     }
@@ -726,7 +746,7 @@ termos:
     fn campo_casa_por_alias_e_por_id() {
         let g = glossario_exemplo();
         let campos = vec![campo("nr_cpf"), campo("contato.email")];
-        let m = mapear(&campos, &g, "sha-c", "sha-g");
+        let m = mapear(ALVO, &campos, &g, "sha-c", "sha-g");
         assert_eq!(m.resumo.mapeados, 2);
         assert_eq!(m.campos[0].termo.as_deref(), Some("pessoa.cpf"));
         assert_eq!(m.campos[1].termo.as_deref(), Some("contato.email"));
@@ -736,7 +756,7 @@ termos:
     fn campo_sem_termo_vira_lacuna_com_justificativa() {
         let g = glossario_exemplo();
         let campos = vec![campo("cpf"), campo("segmento")];
-        let m = mapear(&campos, &g, "sha-c", "sha-g");
+        let m = mapear(ALVO, &campos, &g, "sha-c", "sha-g");
 
         assert_eq!(
             m.resumo,
@@ -758,7 +778,7 @@ termos:
     fn campo_esquecido_e_defeito_de_cobertura() {
         let g = glossario_exemplo();
         let campos = vec![campo("cpf"), campo("email")];
-        let mut m = mapear(&campos, &g, "sha-c", "sha-g");
+        let mut m = mapear(ALVO, &campos, &g, "sha-c", "sha-g");
         m.campos.pop();
         m.resumo = Resumo {
             campos: 1,
@@ -775,7 +795,7 @@ termos:
     fn campo_decidido_duas_vezes_e_defeito_de_cobertura() {
         let g = glossario_exemplo();
         let campos = vec![campo("cpf")];
-        let mut m = mapear(&campos, &g, "sha-c", "sha-g");
+        let mut m = mapear(ALVO, &campos, &g, "sha-c", "sha-g");
         m.campos.push(m.campos[0].clone());
 
         let d = conferir_cobertura(&campos, &m, &g);
@@ -786,7 +806,7 @@ termos:
     fn termo_fora_do_glossario_e_defeito_de_cobertura() {
         let g = glossario_exemplo();
         let campos = vec![campo("cpf")];
-        let mut m = mapear(&campos, &g, "sha-c", "sha-g");
+        let mut m = mapear(ALVO, &campos, &g, "sha-c", "sha-g");
         m.campos[0].termo = Some("pessoa.inventado".to_string());
 
         let d = conferir_cobertura(&campos, &m, &g);
@@ -797,7 +817,7 @@ termos:
     fn resumo_que_nao_bate_e_defeito_de_cobertura() {
         let g = glossario_exemplo();
         let campos = vec![campo("cpf"), campo("segmento")];
-        let mut m = mapear(&campos, &g, "sha-c", "sha-g");
+        let mut m = mapear(ALVO, &campos, &g, "sha-c", "sha-g");
         m.resumo.mapeados = 2;
 
         let d = conferir_cobertura(&campos, &m, &g);
@@ -810,8 +830,8 @@ termos:
     fn mesma_entrada_produz_o_mesmo_arquivo() {
         let g = glossario_exemplo();
         let campos = vec![campo("cpf"), campo("segmento")];
-        let a = serializar(&mapear(&campos, &g, "sha-c", "sha-g")).unwrap();
-        let b = serializar(&mapear(&campos, &g, "sha-c", "sha-g")).unwrap();
+        let a = serializar(&mapear(ALVO, &campos, &g, "sha-c", "sha-g")).unwrap();
+        let b = serializar(&mapear(ALVO, &campos, &g, "sha-c", "sha-g")).unwrap();
         assert_eq!(a, b);
         assert!(!a.contains("run_id"), "artefato nao pode carregar run_id");
     }

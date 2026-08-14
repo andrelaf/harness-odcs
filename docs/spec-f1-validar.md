@@ -13,17 +13,47 @@ F4.
 
 ## Alvo
 
+**Resolvido por run, não constante.** Um repositório de dados tem N contratos, e
+o harness precisa saber em qual está trabalhando: o caminho vive em
+`Run::contrato`, escolhido uma vez na abertura do run e não reconsultado depois
+— as fases de domínio precisam concordar sobre qual arquivo estão lendo,
+classificando e escrevendo.
+
 ```
-contracts/clientes/contract.odcs.yaml
+./run.sh next                                                  # 1 contrato: resolve sozinho
+./run.sh next --contrato contracts/clientes/contract.odcs.yaml  # 2 ou mais: obrigatório
 ```
 
-Caminho relativo à raiz, declarado uma vez em `src/features/f1_validar.rs`. O
-mesmo literal serve ao host e ao container — a raiz do repositório é montada em
-`/home/datacontract`, que é o diretório de trabalho do CLI. Traduzir caminho em
-dois lugares é onde esse tipo de código quebra ao mudar de sistema.
+Sem escolha explícita, `contrato::resolver` só resolve quando não há
+ambiguidade. Com dois ou mais contratos ele **recusa e lista** — adivinhar qual
+contrato classificar é a decisão errada para tomar em silêncio. Caminho fora de
+`contracts/`, ou com `..`, é recusado: o harness escreve neste arquivo, e um
+argumento de linha de comando não precisa ter o poder de apontar para qualquer
+lugar do disco.
 
-Layout de `contracts/`: um diretório por contrato, ver
-[`contracts/README.md`](../contracts/README.md).
+O caminho resolvido é relativo à raiz e usa `/`. O mesmo literal serve ao host e
+ao container — a raiz do repositório é montada em `/home/datacontract`, que é o
+diretório de trabalho do CLI. Traduzir caminho em dois lugares é onde esse tipo
+de código quebra ao mudar de sistema.
+
+## A convenção de nome também é verificada aqui
+
+F1 valida o contrato contra o padrão **e contra a convenção do repositório**.
+São perguntas diferentes: o `datacontract lint` responde *"isto é ODCS válido?"*;
+a convenção responde *"isto está onde alguém vai conseguir achar?"*. Um contrato
+pode passar na primeira e reprovar na segunda — foi o que aconteceu com o
+contrato deste repositório, que declarava `id: clientes-sintetico` morando em
+`contracts/clientes/`.
+
+As regras estão em [`contracts/README.md`](../contracts/README.md#a-convenção-de-nome-e-por-que-ela-é-verificada);
+as funções que as aplicam — `defeitos_do_caminho`, `defeitos_da_identidade` e
+`avisos_do_caminho` — são puras e testadas sem container.
+
+Os defeitos de nome são conferidos **antes** da chamada ao container, porque são
+baratos, e reportados **junto** com os do lint, e não em vez deles. Quem abriu o
+PR precisa ver tudo de uma vez, em lugar de descobrir um problema novo a cada
+push. Falta do nível de domínio é **aviso**, não defeito: funciona, mas custa o
+roteamento por `CODEOWNERS`.
 
 ## Divisão entre as fases
 
@@ -54,11 +84,13 @@ há como responder sem adivinhar.
 
 ## Regra de PASS
 
-`verify` passa quando, **as duas coisas**:
+`verify` passa quando, **as três coisas**:
 
-1. o CLI sai com código `0`; e
+1. o CLI sai com código `0`;
 2. o relatório JSON traz `result: passed` **e** nenhum check individual
-   reprovado.
+   reprovado; e
+3. o caminho segue a convenção do repositório e o `id` do contrato bate com o
+   diretório em que ele mora.
 
 Confiar só no campo agregado deixaria passar relatório internamente
 inconsistente. Divergência entre exit code e veredito é reportada como defeito

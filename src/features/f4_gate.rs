@@ -267,14 +267,10 @@ fn compor(run: &mut Run, fase: &str) -> Result<Composicao, String> {
     let c = f3_classificar::laudo_atual(run, "f4", fase)?;
     let (laudo, catalogo, mapeamento) = (c.laudo, c.catalogo, c.mapeamento);
 
-    let path = run.cfg.root.join(contrato::CAMINHO);
-    let bruto = fs::read_to_string(&path).map_err(|e| {
-        format!(
-            "contrato `{}` ilegivel em {} ({e})",
-            contrato::CAMINHO,
-            path.display()
-        )
-    })?;
+    let alvo = run.contrato.clone();
+    let path = run.cfg.root.join(&alvo);
+    let bruto = fs::read_to_string(&path)
+        .map_err(|e| format!("contrato `{alvo}` ilegivel em {} ({e})", path.display()))?;
 
     let declarados = declaracao_do_yaml(&bruto).map_err(|e| format!("{e:#}"))?;
     let campos = confrontar(&laudo.campos, &declarados);
@@ -283,7 +279,7 @@ fn compor(run: &mut Run, fase: &str) -> Result<Composicao, String> {
         aplicar(&bruto, &laudo.campos).map_err(|e| format!("{e:#}"))?;
 
     let proposta = Proposta {
-        contrato: contrato::CAMINHO.to_string(),
+        contrato: alvo,
         contrato_sha256: laudo.contrato_sha256.clone(),
         glossario_versao: laudo.glossario_versao.clone(),
         catalogo_versao: laudo.catalogo_versao.clone(),
@@ -413,23 +409,24 @@ fn lint_do_enriquecido(run: &mut Run) -> Result<Vec<String>, String> {
 /// o repositorio num estado que nenhuma fase aprovou, e um `Blocked` teria de
 /// saber desfazer o que escreveu.
 fn aplicar_no_contrato(run: &mut Run, c: &Composicao) -> Outcome {
-    let destino = run.cfg.root.join(contrato::CAMINHO);
+    // Do que a proposta diz, e nao de `run`: e o mesmo caminho, e ler daqui faz
+    // o artefato julgado e o arquivo escrito serem o mesmo por construcao.
+    let alvo = c.proposta.contrato.clone();
+    let destino = run.cfg.root.join(&alvo);
     let atual = fs::read_to_string(&destino).unwrap_or_default();
 
     if atual == c.yaml_enriquecido {
         run.note(format!(
-            "contrato {} ja reflete a classificacao vigente — nada a escrever",
-            contrato::CAMINHO
+            "contrato {alvo} ja reflete a classificacao vigente — nada a escrever"
         ));
         return Outcome::Pass;
     }
 
     if let Err(e) = fs::write(&destino, &c.yaml_enriquecido) {
-        return Outcome::Fail(format!("escrevendo {}: {e}", contrato::CAMINHO));
+        return Outcome::Fail(format!("escrevendo {alvo}: {e}"));
     }
     run.note(format!(
-        "contrato {} enriquecido — {} campo(s) marcado(s); o diff vai no commit do handoff",
-        contrato::CAMINHO,
+        "contrato {alvo} enriquecido — {} campo(s) marcado(s); o diff vai no commit do handoff",
         c.proposta.resumo.classificados
     ));
     Outcome::Pass
@@ -453,11 +450,14 @@ fn aplicar_no_contrato(run: &mut Run, c: &Composicao) -> Outcome {
 /// versao existem de verdade — mesma `version` reclassificada por um catalogo
 /// novo sao duas constatacoes diferentes, e apagar a primeira destruiria
 /// justamente o que a auditoria quer comparar.
-fn caminho_do_laudo(versao: &str, sha: &str) -> String {
-    let dir = std::path::Path::new(contrato::CAMINHO)
+fn caminho_do_laudo(contrato: &str, versao: &str, sha: &str) -> String {
+    // Ao lado do contrato, seja qual for a profundidade dele: `contracts/x/` ou
+    // `contracts/<dominio>/<contrato>/` produzem `laudos/` no mesmo nivel do
+    // `.yaml`, sem o harness precisar saber qual layout a organizacao adotou.
+    let dir = std::path::Path::new(contrato)
         .parent()
         .map(|p| p.to_string_lossy().replace('\\', "/"))
-        .unwrap_or_else(|| "contracts".to_string());
+        .unwrap_or_else(|| contrato::DIRETORIO.to_string());
     format!("{dir}/laudos/{versao}-{}.md", &sha[..7])
 }
 
@@ -491,7 +491,7 @@ fn gravar_laudo(run: &mut Run, c: &Composicao) -> Result<(), String> {
     // responde.
     let versao = versao_do_yaml(&c.yaml_enriquecido).map_err(|e| format!("{e:#}"))?;
     let sha = tools::sha256_hex(&c.yaml_enriquecido);
-    let destino = caminho_do_laudo(&versao, &sha);
+    let destino = caminho_do_laudo(&c.proposta.contrato, &versao, &sha);
     let corpo = documento_do_laudo(&c.proposta, &c.laudo, &versao, &sha);
 
     let path = run.cfg.root.join(&destino);
@@ -1277,6 +1277,10 @@ fn markdown(p: &Proposta, aprovado_em: Option<&str>) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// O contrato dos testes. Antes era `contrato::CAMINHO`; agora que o alvo e
+    /// resolvido por run, o valor entra por parametro tambem aqui.
+    const ALVO: &str = "contracts/clientes/contract.odcs.yaml";
     use crate::features::contrato::Campo;
     use crate::features::f2_mapear::{carregar_glossario, mapear};
     use crate::features::f3_classificar::{carregar_catalogo, classificar};
@@ -1347,7 +1351,7 @@ classificacoes:
                 tipo: "string".to_string(),
             })
             .collect();
-        let m = mapear(&campos, &glossario(), "sha-c", "sha-g");
+        let m = mapear(ALVO, &campos, &glossario(), "sha-c", "sha-g");
         classificar(&m, &catalogo(), "sha-cat")
     }
 
@@ -1606,7 +1610,7 @@ classificacoes:
             })
             .collect();
 
-        let m = mapear(&campos, &g, "sha-c", "sha-g");
+        let m = mapear(ALVO, &campos, &g, "sha-c", "sha-g");
         let l = classificar(&m, cat, "sha-cat");
         confrontar(&l.campos, &declarados)
     }
@@ -1728,7 +1732,7 @@ classificacoes:
         let campos = confrontar(&l.campos, &declaracao_do_yaml(yaml).unwrap());
         let gate = itens_de_gate(&campos);
         let p = Proposta {
-            contrato: contrato::CAMINHO.to_string(),
+            contrato: ALVO.to_string(),
             contrato_sha256: l.contrato_sha256.clone(),
             glossario_versao: l.glossario_versao.clone(),
             catalogo_versao: l.catalogo_versao.clone(),
@@ -1805,7 +1809,7 @@ classificacoes:
     #[test]
     fn laudo_fica_ao_lado_do_contrato_com_versao_e_sha_no_nome() {
         assert_eq!(
-            caminho_do_laudo("1.2.0", "abcdef1234567890"),
+            caminho_do_laudo(ALVO, "1.2.0", "abcdef1234567890"),
             "contracts/clientes/laudos/1.2.0-abcdef1.md"
         );
     }
@@ -1815,8 +1819,8 @@ classificacoes:
     #[test]
     fn contratos_diferentes_na_mesma_versao_nao_colidem() {
         assert_ne!(
-            caminho_do_laudo("1.0.0", "aaaaaaa1111"),
-            caminho_do_laudo("1.0.0", "bbbbbbb2222")
+            caminho_do_laudo(ALVO, "1.0.0", "aaaaaaa1111"),
+            caminho_do_laudo(ALVO, "1.0.0", "bbbbbbb2222")
         );
     }
 
@@ -1847,6 +1851,6 @@ classificacoes:
         let contrato = include_str!("../../contracts/clientes/contract.odcs.yaml");
         let v = versao_do_yaml(contrato).unwrap();
         assert!(!v.is_empty());
-        assert!(caminho_do_laudo(&v, "abcdef1234567890").ends_with(".md"));
+        assert!(caminho_do_laudo(ALVO, &v, "abcdef1234567890").ends_with(".md"));
     }
 }

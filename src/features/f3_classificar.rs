@@ -736,6 +736,10 @@ fn markdown(l: &Laudo) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// O contrato dos testes. Antes era `contrato::CAMINHO`; agora que o alvo e
+    /// resolvido por run, o valor entra por parametro tambem aqui.
+    const ALVO: &str = "contracts/clientes/contract.odcs.yaml";
     use crate::features::contrato::Campo;
     use crate::features::f2_mapear::{Glossario, carregar_glossario, mapear};
 
@@ -809,7 +813,7 @@ classificacoes:
                 tipo: "string".to_string(),
             })
             .collect();
-        let m = mapear(&campos, &glossario(), "sha-c", "sha-g");
+        let m = mapear(ALVO, &campos, &glossario(), "sha-c", "sha-g");
         let cat = catalogo();
         let l = classificar(&m, &cat, "sha-cat");
         (m, l, cat)
