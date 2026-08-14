@@ -19,6 +19,9 @@ name: contrato
 
 on:
   pull_request:
+    # O pull request para `main` e o gatilho de tudo — nao ha branch de longa
+    # duracao alem dela. Ver docs/git-flow.md.
+    branches: [main]
     paths:
       - 'contracts/**'
       - 'glossary/**'

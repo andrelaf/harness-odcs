@@ -1,0 +1,50 @@
+# Convencao de nome de branch.
+#
+# Este e o unico check do repositorio que reprova por **processo** em vez de
+# conteudo, e o unico com regra escrita em YAML. A excecao e deliberada: a regra
+# fala de git, nao de contrato de dados. O binario nunca ve um nome de branch, e
+# nao deveria ver — `check` responde sobre o contrato, e so.
+#
+# A regra em si esta em docs/git-flow.md. Aqui esta a verificacao dela.
+
+name: convencao
+
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  branch:
+    runs-on: ubuntu-latest
+    steps:
+      - name: nome da branch
+        env:
+          BRANCH: ${{ github.head_ref }}
+        run: |
+          # POSIX ERE. `feat/202608/verificacao-em-pull-request`:
+          #   tipo   — diz o que a branch e antes de alguem abrir o diff
+          #   aaaamm — mes de abertura, mes valido (01-12)
+          #   descr  — kebab-case minusculo, sem hifen duplo nem nas pontas
+          padrao='^(feat|fix|docs|chore)/[0-9]{4}(0[1-9]|1[0-2])/[a-z0-9]+(-[a-z0-9]+)*$'
+
+          if echo "$BRANCH" | grep -Eq "$padrao"; then
+            echo "::notice::branch \`$BRANCH\` segue a convencao"
+            exit 0
+          fi
+
+          # A mensagem carrega a correcao inteira. Um erro de processo que
+          # obriga a pessoa a abrir a documentacao para descobrir o formato
+          # custa mais que o erro.
+          echo "::error::branch \`$BRANCH\` fora da convencao — o formato e \`<tipo>/<aaaamm>/<descricao-em-kebab-case>\`, por exemplo \`feat/$(date +%Y%m)/gate-humano-em-lacuna\`. Tipos: feat, fix, docs, chore. Ver docs/git-flow.md"
+          echo
+          echo "  git branch -m $BRANCH <novo-nome>"
+          echo "  git push -u origin <novo-nome>"
+          echo "  gh pr create --base main --fill"
+          echo
+          echo "O head de um pull request nao se renomeia: este PR precisa ser"
+          echo "fechado e reaberto na branch nova. E o motivo de este check ser"
+          echo "o primeiro do arquivo — errar o nome custa mais depois."
+          exit 1

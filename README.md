@@ -154,6 +154,8 @@ O veredito viaja no exit code: `0` passou, `1` reprovou, `5` bloqueado aguardand
 
 O workflow em [`.github/workflows/contrato-pr.yml`](.github/workflows/contrato-pr.yml) é deliberadamente burro: chama `check`, grava o `report.json` e depois só o **redesenha** em anotação, comentário e resumo. Uma verificação, três desenhos — 99,6% do custo é partida de container, então desenhar três vezes não pode custar três verificações.
 
+Uma branch por entrega, nascida da `main`, e o **pull request para `main` é o gatilho** — nada acontece por push direto. A convenção de nome (`<tipo>/<aaaamm>/<descrição>`) é verificada no CI e está em [`docs/git-flow.md`](docs/git-flow.md).
+
 **Setup, portabilidade e a variante mais estrita estão em [`.github/README.md`](.github/README.md).** É lá também que está registrado o destino previsto fora desta PoC: **Azure DevOps, com grupos do Entra ID (AD) como aprovadores** por política de branch. A porta custa um renderizador e um YAML — a política, os exit codes e o `report.json` não se movem.
 
 ---
@@ -322,6 +324,7 @@ Semana 4 de 4. As quatro features rodam de ponta a ponta, a medição é derivad
 | F4 · Gate + relatório — [spec](docs/spec-f4-gate.md) | pronta · contrato enriquecido, lacunas e pausa humana |
 | Medição (custo, duração, erros) | pronta · `./run.sh metrics`, derivada do trace |
 | Verificação em pull request — [`.github/`](.github/README.md) | pronta · `./run.sh check`, workflow e CODEOWNERS |
+| [`docs/git-flow.md`](docs/git-flow.md) — branch, PR e merge | pronto · convenção verificada no CI |
 | Azure DevOps com grupos do AD como aprovadores | **previsto, não construído** · porta descrita em [`.github/README.md`](.github/README.md#portar-para-azure-devops) |
 | [`docs/decisao.md`](docs/decisao.md) — onde se paga e onde perde | pronto |
 | [`docs/demo.md`](docs/demo.md) — roteiro ensaiado, 10 min | pronto |
@@ -368,5 +371,5 @@ state/                    feature-list.json, progress.json, gate-pendente.json, 
 trace/                    <run_id>.jsonl, append-only
 metrics/                  metrics.jsonl — derivado de trace/, regenerável
 evidence/                 saída bruta das ferramentas, por run
-docs/                     brief, contexto, specs, decisão e roteiro de demo
+docs/                     brief, contexto, specs, git flow, decisão e roteiro de demo
 ```

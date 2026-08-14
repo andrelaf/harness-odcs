@@ -9,7 +9,13 @@ Arquivos desta pasta:
 | Arquivo | Papel |
 |---|---|
 | [`workflows/contrato-pr.yml`](workflows/contrato-pr.yml) | O job. Não contém regra de negócio — chama o binário e desenha o resultado. |
+| [`workflows/pr-convencao.yml`](workflows/pr-convencao.yml) | Confere o nome da branch. A regra está em [`docs/git-flow.md`](../docs/git-flow.md). |
 | [`CODEOWNERS`](CODEOWNERS) | Quem revisa o quê. É o que transforma "alguém precisa aprovar" em "esta pessoa precisa aprovar". |
+| [`pull_request_template.md`](pull_request_template.md) | O que quem abre o PR precisa dizer, e o que quem aprova precisa ter lido. |
+
+Os dois workflows disparam em **pull request para `main`** — não há branch de
+longa duração além dela, e nada acontece por push direto. O ciclo inteiro está
+em [`docs/git-flow.md`](../docs/git-flow.md).
 
 ---
 
@@ -110,7 +116,7 @@ reclassifica o próprio campo e o gate do F4 deixa de significar qualquer coisa.
 | **Require a pull request before merging** | Sem isso, um push direto pula a verificação inteira. |
 | **Require review from Code Owners** | É o que dá autoridade à revisão. É este item — não o CI — que segura o merge no exit `5`. |
 | **Dismiss stale pull request approvals when new commits are pushed** | **Crítico.** O pedido de gate é identificado pelo hash do seu conteúdo: se o contrato, o glossário ou o catálogo mudarem, o pedido é outro. Sem isso, uma aprovação dada numa lacuna carregaria em silêncio para um contrato diferente. |
-| **Require status checks to pass** → marque `check` | O nome do check é o do job (`check`) no workflow `contrato`. Ele só aparece na lista depois de ter rodado ao menos uma vez. |
+| **Require status checks to pass** → marque `check` e `branch` | Os nomes são os dos jobs: `check` (workflow `contrato`) e `branch` (workflow `convencao`). Eles só aparecem na lista depois de terem rodado ao menos uma vez. |
 | **Require branches to be up to date before merging** | O veredito é calculado sobre um sha256 específico do contrato. Numa branch desatualizada, ele responde por um conteúdo que não é o que vai entrar. |
 
 ### 3. Layout de diretório que o CODEOWNERS consegue rotear
