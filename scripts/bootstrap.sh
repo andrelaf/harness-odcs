@@ -19,23 +19,10 @@ done
 
 echo
 echo "== imagem do motor de validacao =="
-if docker image inspect "$DC_IMAGE" >/dev/null 2>&1; then
-    echo "  $DC_IMAGE ja presente"
-else
-    echo "  baixando $DC_IMAGE"
-    docker pull "$DC_IMAGE"
-fi
-
-atual="$(docker image inspect --format '{{index .RepoDigests 0}}' "$DC_IMAGE" 2>/dev/null || echo '')"
-case "$atual" in
-    *"$DC_DIGEST"*) echo "  digest confere: $DC_DIGEST" ;;
-    *)
-        echo "  ERRO: digest divergente"
-        echo "    esperado : $DC_DIGEST"
-        echo "    encontrado: ${atual:-nenhum}"
-        exit 1
-        ;;
-esac
+# Delegado: e a mesma verificacao que o pacote leva consigo. Duplicar aqui faria
+# o ambiente de quem desenvolve divergir do de quem consome, que e exatamente a
+# divergencia que este projeto evita em todo o resto.
+"$HARNESS_ROOT/scripts/imagem.sh"
 
 echo
 echo "== build =="
