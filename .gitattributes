@@ -1,24 +1,19 @@
-# A maquina de desenvolvimento tem core.autocrlf=true. Sem este arquivo, o Git
-# converte os scripts para CRLF ao materializar a working tree e o bash falha
-# com `$'\r': command not found`. O ponto de entrada quebraria no clone — antes
-# mesmo de a segunda IDE entrar em cena. Isto e requisito de portabilidade.
+# Shell script com CRLF nao executa: o `\r` entra no shebang e o interpretador
+# vira `/usr/bin/env sh\r`, que nao existe. Quebra no runner, e a mensagem de
+# erro nao diz nada sobre fim de linha.
+*.sh text eol=lf
 
-* text=auto eol=lf
+# O contrato tem o sha256 conferido contra o que o laudo registra. Fim de linha
+# diferente e conteudo diferente: o mesmo arquivo passaria a ter dois hashes
+# conforme quem fez o checkout.
+*.yaml text eol=lf
+*.yml  text eol=lf
 
-# Ponto de entrada e despachantes: LF obrigatorio.
-*.sh    text eol=lf
-
-# Codigo e manifestos.
-*.rs    text eol=lf
-*.toml  text eol=lf
-*.md    text eol=lf
-*.yaml  text eol=lf
-*.yml   text eol=lf
-
-# Artefatos de evidencia: LF fixo mantem o diff do trace e do estado estavel
-# entre maquinas. Evidencia que muda de bytes sem mudar de conteudo nao serve
-# como evidencia.
-*.json  text eol=lf
-*.jsonl text eol=lf
-
-Cargo.lock text eol=lf
+# Nota sobre o bit de execucao, que o `.gitattributes` NAO resolve: no Windows
+# `core.fileMode` e `false`, entao `chmod +x` local nao vira commit. Script novo
+# em `scripts/` precisa de
+#
+#     git update-index --chmod=+x scripts/novo.sh
+#
+# senao ele chega ao runner como 100644 e o job falha com "permission denied" —
+# que foi como o primeiro release deste repositorio reprovou.

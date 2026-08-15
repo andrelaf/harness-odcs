@@ -325,6 +325,8 @@ Semana 4 de 4. As quatro features rodam de ponta a ponta, a medição é derivad
 | Medição (custo, duração, erros) | pronta · `./run.sh metrics`, derivada do trace |
 | Verificação em pull request — [`.github/`](.github/README.md) | pronta · `./run.sh check`, workflow e CODEOWNERS |
 | [`docs/git-flow.md`](docs/git-flow.md) — branch, PR e merge | pronto · convenção verificada no CI |
+| [`docs/distribuicao.md`](docs/distribuicao.md) — o pacote que sai daqui | pronto · `./scripts/package.sh`, release por tag |
+| Repositório de contratos consumindo o pacote | [`andrelaf/data-contracts`](https://github.com/andrelaf/data-contracts) · sem Rust, sem vocabulário |
 | Azure DevOps com grupos do AD como aprovadores | **previsto, não construído** · porta descrita em [`.github/README.md`](.github/README.md#portar-para-azure-devops) |
 | [`docs/decisao.md`](docs/decisao.md) — onde se paga e onde perde | pronto |
 | [`docs/demo.md`](docs/demo.md) — roteiro ensaiado, 10 min | pronto |
@@ -371,5 +373,5 @@ state/                    feature-list.json, progress.json, gate-pendente.json, 
 trace/                    <run_id>.jsonl, append-only
 metrics/                  metrics.jsonl — derivado de trace/, regenerável
 evidence/                 saída bruta das ferramentas, por run
-docs/                     brief, contexto, specs, git flow, decisão e roteiro de demo
+docs/                     brief, contexto, specs, git flow, distribuição, decisão e demo
 ```
