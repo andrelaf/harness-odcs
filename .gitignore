@@ -8,5 +8,11 @@
 # regra esta em contracts/README.md, isto so impede que o engano vire commit.
 /contracts/**/*.html
 
+# A excecao deliberada: o desenho do contrato em HTML, ao lado do laudo, para
+# quem decide sobre o dado e nao le YAML. Nao e artefato solto — e emitido por
+# `aplicar`, tem o nome derivado do contrato e do criterio, e o `check` confere
+# byte a byte que corresponde ao contrato deste commit.
+!/contracts/**/laudos/*.html
+
 **/*.rs.bk
 *.pdb

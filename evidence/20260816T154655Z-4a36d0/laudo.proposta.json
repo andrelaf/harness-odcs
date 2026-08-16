@@ -1,0 +1,183 @@
+{
+  "contrato": "contracts/clientes/contract.odcs.yaml",
+  "contrato_sha256": "03d0120f9caa4a0302d8ff6d80d77a606e0e4bdaccb5d99c655f594c31d7d6b9",
+  "glossario_versao": "1.0.0",
+  "catalogo_versao": "1.0.0",
+  "resumo": {
+    "campos": 9,
+    "classificados": 7,
+    "primeira_classificacao": 0,
+    "inalterados": 7,
+    "lacunas": 2,
+    "reclassificacoes": 0,
+    "conflitos": 0
+  },
+  "gate_sha256": "4f773bab5f6e400f16bd5fdcabd11dab437c929f3d03f03736433be527779e78",
+  "gate": [
+    {
+      "tipo": "lacuna",
+      "campo": "segmento",
+      "detalhe": "campo sem termo no glossario — segue sem classificacao no contrato ate decisao humana"
+    },
+    {
+      "tipo": "lacuna",
+      "campo": "valor_total_compras",
+      "detalhe": "campo sem termo no glossario — segue sem classificacao no contrato ate decisao humana"
+    }
+  ],
+  "campos": [
+    {
+      "campo": "cep",
+      "termo": "endereco.cep",
+      "mudanca": "inalterado",
+      "proposto": {
+        "classification": "confidential",
+        "pii": true,
+        "sensivel": false
+      },
+      "declarado": {
+        "classification": "confidential",
+        "pii": true,
+        "sensivel": false
+      },
+      "justificativa": "CEP de residencia nao identifica sozinho, mas no Brasil chega ao nivel de logradouro e reidentifica quando combinado com data de nascimento.",
+      "referencia": "LGPD art. 5, I"
+    },
+    {
+      "campo": "cpf",
+      "termo": "pessoa.cpf",
+      "mudanca": "inalterado",
+      "proposto": {
+        "classification": "restricted",
+        "pii": true,
+        "sensivel": false
+      },
+      "declarado": {
+        "classification": "restricted",
+        "pii": true,
+        "sensivel": false
+      },
+      "justificativa": "Identificador univoco de pessoa natural emitido pela Receita Federal. Identifica sozinho e serve de chave de cruzamento com praticamente qualquer outra base do pais.",
+      "referencia": "LGPD art. 5, I"
+    },
+    {
+      "campo": "data_cadastro",
+      "termo": "cadastro.data_criacao",
+      "mudanca": "inalterado",
+      "proposto": {
+        "classification": "internal",
+        "pii": false,
+        "sensivel": false
+      },
+      "declarado": {
+        "classification": "internal",
+        "pii": false,
+        "sensivel": false
+      },
+      "justificativa": "Descreve o ciclo de vida do registro, nao a pessoa: isolada, nao identifica ninguem nem revela atributo de pessoa natural. Numa linha ja identificada ela herda o carater pessoal do conjunto — risco que se trata no nivel do dataset, nao no do campo.",
+      "referencia": "LGPD art. 5, I — por exclusao"
+    },
+    {
+      "campo": "data_nascimento",
+      "termo": "pessoa.data_nascimento",
+      "mudanca": "inalterado",
+      "proposto": {
+        "classification": "confidential",
+        "pii": true,
+        "sensivel": false
+      },
+      "declarado": {
+        "classification": "confidential",
+        "pii": true,
+        "sensivel": false
+      },
+      "justificativa": "Nao identifica sozinha, mas compoe o quase-identificador classico (data de nascimento + sexo + localidade), que reidentifica parcela alta de uma populacao quando combinado.",
+      "referencia": "LGPD art. 5, I"
+    },
+    {
+      "campo": "email",
+      "termo": "contato.email",
+      "mudanca": "inalterado",
+      "proposto": {
+        "classification": "confidential",
+        "pii": true,
+        "sensivel": false
+      },
+      "declarado": {
+        "classification": "confidential",
+        "pii": true,
+        "sensivel": false
+      },
+      "justificativa": "Endereco de contato individual. Na pratica funciona como identificador de conta e alcanca a pessoa diretamente.",
+      "referencia": "LGPD art. 5, I"
+    },
+    {
+      "campo": "id_cliente",
+      "termo": "pessoa.identificador_interno",
+      "mudanca": "inalterado",
+      "proposto": {
+        "classification": "confidential",
+        "pii": true,
+        "sensivel": false
+      },
+      "declarado": {
+        "classification": "confidential",
+        "pii": true,
+        "sensivel": false
+      },
+      "justificativa": "Chave pseudonimizada. A pseudonimizacao nao descaracteriza o dado pessoal enquanto a organizacao mantiver, ainda que separada, a informacao adicional que permite reassociar a chave a pessoa.",
+      "referencia": "LGPD art. 5, I c/c art. 13, par. 4"
+    },
+    {
+      "campo": "nome_completo",
+      "termo": "pessoa.nome_completo",
+      "mudanca": "inalterado",
+      "proposto": {
+        "classification": "confidential",
+        "pii": true,
+        "sensivel": false
+      },
+      "declarado": {
+        "classification": "confidential",
+        "pii": true,
+        "sensivel": false
+      },
+      "justificativa": "Nome civil identifica a pessoa natural sem necessidade de cruzamento com outra base.",
+      "referencia": "LGPD art. 5, I"
+    },
+    {
+      "campo": "segmento",
+      "termo": null,
+      "mudanca": "lacuna",
+      "proposto": {
+        "classification": null,
+        "pii": null,
+        "sensivel": null
+      },
+      "declarado": {
+        "classification": null,
+        "pii": null,
+        "sensivel": null
+      },
+      "justificativa": "campo sem termo no glossario (lacuna de F2) — classificar exige decisao humana",
+      "referencia": null
+    },
+    {
+      "campo": "valor_total_compras",
+      "termo": null,
+      "mudanca": "lacuna",
+      "proposto": {
+        "classification": null,
+        "pii": null,
+        "sensivel": null
+      },
+      "declarado": {
+        "classification": null,
+        "pii": null,
+        "sensivel": null
+      },
+      "justificativa": "campo sem termo no glossario (lacuna de F2) — classificar exige decisao humana",
+      "referencia": null
+    }
+  ]
+}

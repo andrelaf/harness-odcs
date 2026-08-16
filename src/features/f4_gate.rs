@@ -329,7 +329,7 @@ pub(crate) fn gravar_proposta(run: &mut Run, c: &Composicao) -> Result<(), Strin
     Ok(())
 }
 
-fn caminho_do_enriquecido(run: &Run) -> String {
+pub(crate) fn caminho_do_enriquecido(run: &Run) -> String {
     format!(
         "evidence/{}/f4-contrato-enriquecido.odcs.yaml",
         run.tracer.run_id()

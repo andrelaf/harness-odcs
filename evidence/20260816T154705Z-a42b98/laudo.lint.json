@@ -1,0 +1,30 @@
+{
+  "checks": [
+    {
+      "category": null,
+      "diagnostics": null,
+      "engine": "datacontract",
+      "failed_samples": null,
+      "field": null,
+      "id": null,
+      "implementation": null,
+      "key": null,
+      "language": null,
+      "model": null,
+      "name": "Data contract is syntactically valid",
+      "quality_id": null,
+      "reason": null,
+      "result": "passed",
+      "tags": null,
+      "type": "lint"
+    }
+  ],
+  "dataContractId": "clientes",
+  "dataContractVersion": "1.0.0",
+  "dataProductId": null,
+  "datacontractCliVersion": "1.1.0",
+  "filters": null,
+  "outputPortId": null,
+  "result": "passed",
+  "server": null
+}

@@ -101,6 +101,12 @@ pub struct Propostas {
     pub anexo_lint: Option<String>,
     #[serde(default)]
     pub anexo_lint_destino: Option<String>,
+    /// O contrato desenhado em HTML — para quem decide sobre o dado e nao le
+    /// YAML. Vai no mesmo commit, entao corresponde ao contrato deste PR.
+    #[serde(default)]
+    pub anexo_html: Option<String>,
+    #[serde(default)]
+    pub anexo_html_destino: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -281,6 +287,7 @@ pub fn aplicar(cfg: &Config, escolha: Option<&str>) -> Result<(Relatorio, Vec<St
             &r.propostas.anexo_proposta_destino,
         ),
         (&r.propostas.anexo_lint, &r.propostas.anexo_lint_destino),
+        (&r.propostas.anexo_html, &r.propostas.anexo_html_destino),
     ] {
         let (Some(origem), Some(destino)) = (origem, destino) else {
             continue;
@@ -450,9 +457,10 @@ fn montar(run: &mut Run, alvo: &str) -> Result<Relatorio> {
         .ok()
         .as_deref()
         .and_then(lint_normalizado),
+        html: html_do_enriquecido(run, &run_id, &c.proposta.contrato_sha256),
     };
     if let Some(destino) = &propostas.laudo_destino {
-        let (p, l) = Anexos::destinos(destino);
+        let (p, l, h) = Anexos::destinos(destino);
         let base = format!("evidence/{run_id}");
         if fs::write(
             run.cfg.root.join(format!("{base}/laudo.proposta.json")),
@@ -468,6 +476,12 @@ fn montar(run: &mut Run, alvo: &str) -> Result<Relatorio> {
         {
             propostas.anexo_lint = Some(format!("{base}/laudo.lint.json"));
             propostas.anexo_lint_destino = Some(l);
+        }
+        if let Some(corpo) = &anexos.html
+            && fs::write(run.cfg.root.join(format!("{base}/laudo.html")), corpo).is_ok()
+        {
+            propostas.anexo_html = Some(format!("{base}/laudo.html"));
+            propostas.anexo_html_destino = Some(h);
         }
     }
 
@@ -542,14 +556,44 @@ fn montar(run: &mut Run, alvo: &str) -> Result<Relatorio> {
 struct Anexos {
     proposta: String,
     lint: Option<String>,
+    html: Option<String>,
 }
 
 impl Anexos {
-    /// `<laudo>.md` -> `<laudo>.proposta.json` e `<laudo>.lint.json`.
-    fn destinos(laudo_destino: &str) -> (String, String) {
+    /// `<laudo>.md` -> os anexos, todos com o mesmo nome-base.
+    fn destinos(laudo_destino: &str) -> (String, String, String) {
         let base = laudo_destino.strip_suffix(".md").unwrap_or(laudo_destino);
-        (format!("{base}.proposta.json"), format!("{base}.lint.json"))
+        (
+            format!("{base}.proposta.json"),
+            format!("{base}.lint.json"),
+            format!("{base}.html"),
+        )
     }
+}
+
+/// O contrato desenhado em HTML, sem a hora em que foi desenhado.
+///
+/// O `export html` do `datacontract-cli` carimba `Created at <data> UTC` no
+/// rodape, e duas execucoes seguidas produzem arquivos diferentes. Versionar
+/// assim faria o mesmo contrato gerar um diff por push, e o `check` nao
+/// conseguiria exigir o arquivo — a regra que sustenta tudo aqui e comparar
+/// conteudo.
+///
+/// A hora e substituida pela procedencia, que e o que de fato responde "este
+/// desenho corresponde a que contrato?". A data de emissao ja e a do commit, e
+/// o Git responde por ela melhor que um rodape.
+fn html_normalizado(bruto: &str, sha_do_contrato: &str) -> Option<String> {
+    // Sem `regex` no projeto — e uma dependencia inteira para uma substituicao.
+    // Recorte por delimitadores: o que muda esta entre "Created at " e " with".
+    let inicio = bruto.find("Created at ")?;
+    let resto = &bruto[inicio..];
+    let fim = inicio + resto.find(" with")?;
+    Some(format!(
+        "{}Gerado do contrato sha256 {}{}",
+        &bruto[..inicio],
+        &sha_do_contrato[..16.min(sha_do_contrato.len())],
+        &bruto[fim..]
+    ))
 }
 
 /// O lint do enriquecido, sem o que muda a cada execucao.
@@ -562,6 +606,36 @@ impl Anexos {
 ///
 /// O que fica e o que responde a auditoria: o veredito, os checks e a versao do
 /// motor que os produziu.
+/// Desenha o contrato **enriquecido** em HTML, para quem nao le YAML.
+///
+/// Quem trabalha com produto ou com o dado em si precisa saber o que ha no
+/// dataset sem abrir um `.yaml` de trezentas linhas. O desenho vai ao lado do
+/// laudo, no mesmo commit, e por isso corresponde exatamente ao contrato que
+/// aquele pull request esta propondo — um HTML publicado em outro lugar
+/// envelheceria em silencio.
+///
+/// Custa uma partida de container a mais por verificacao. E o item mais caro
+/// que o `check` faz depois do lint, e vale porque troca "abra o YAML e
+/// interprete" por "abra e leia" para quem decide.
+///
+/// Falha nao reprova: um desenho ausente e menos grave que uma verificacao
+/// interrompida, e o veredito do contrato nao depende dele.
+fn html_do_enriquecido(run: &mut Run, run_id: &str, sha: &str) -> Option<String> {
+    let origem = f4_gate::caminho_do_enriquecido(run);
+    let destino = format!("evidence/{run_id}/f4-contrato.html");
+    let saida = run
+        .datacontract(
+            "check-html",
+            &["export", "html", &origem, "--output", &destino],
+        )
+        .ok()?;
+    if !saida.ok() {
+        return None;
+    }
+    let bruto = fs::read_to_string(run.cfg.root.join(&destino)).ok()?;
+    html_normalizado(&bruto, sha)
+}
+
 fn lint_normalizado(bruto: &str) -> Option<String> {
     let mut v: serde_json::Value = serde_json::from_str(bruto).ok()?;
     let o = v.as_object_mut()?;
@@ -634,10 +708,11 @@ fn aplicacao_pendente(
         )),
     }
 
-    let (p_dest, l_dest) = Anexos::destinos(destino);
+    let (p_dest, l_dest, h_dest) = Anexos::destinos(destino);
     for (dest, esperado) in [
         (p_dest, Some(&anexos.proposta)),
         (l_dest, anexos.lint.as_ref()),
+        (h_dest, anexos.html.as_ref()),
     ] {
         let Some(esperado) = esperado else { continue };
         match fs::read_to_string(run.cfg.root.join(&dest)) {
