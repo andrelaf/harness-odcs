@@ -465,7 +465,7 @@ fn aplicar_no_contrato(run: &mut Run, c: &Composicao) -> Outcome {
 /// versao existem de verdade — mesma `version` reclassificada por um catalogo
 /// novo sao duas constatacoes diferentes, e apagar a primeira destruiria
 /// justamente o que a auditoria quer comparar.
-pub(crate) fn caminho_do_laudo(contrato: &str, versao: &str, sha: &str) -> String {
+pub(crate) fn caminho_do_laudo(contrato: &str, versao: &str, sha: &str, criterio: &str) -> String {
     // Ao lado do contrato, seja qual for a profundidade dele: `contracts/x/` ou
     // `contracts/<dominio>/<contrato>/` produzem `laudos/` no mesmo nivel do
     // `.yaml`, sem o harness precisar saber qual layout a organizacao adotou.
@@ -473,7 +473,25 @@ pub(crate) fn caminho_do_laudo(contrato: &str, versao: &str, sha: &str) -> Strin
         .parent()
         .map(|p| p.to_string_lossy().replace('\\', "/"))
         .unwrap_or_else(|| contrato::DIRETORIO.to_string());
-    format!("{dir}/laudos/{versao}-{}.md", &sha[..7])
+    format!(
+        "{dir}/laudos/{versao}-{}-{}.md",
+        &sha[..7],
+        &criterio[..7.min(criterio.len())]
+    )
+}
+
+/// O sha256 do **criterio** — glossario e catalogo que julgaram, juntos.
+///
+/// Entra no nome do laudo porque so o sha do contrato nao bastava. O comentario
+/// acima sempre prometeu que "mesma versao reclassificada por um catalogo novo
+/// sao duas constatacoes diferentes", mas com o contrato inalterado as duas
+/// caiam no **mesmo arquivo**: a segunda emissao ou sobrescrevia a primeira, ou
+/// travava. Com o criterio no nome, elas coexistem — que era a intencao.
+pub(crate) fn sha_do_criterio(l: &f3_classificar::Laudo) -> String {
+    // Os dois hashes concatenados, e nao so o do catalogo: o glossario decide
+    // qual termo cada campo recebe, entao mudar so ele tambem muda a
+    // constatacao, sem tocar em uma linha do catalogo.
+    tools::sha256_hex(&format!("{}\n{}", l.glossario_sha256, l.catalogo_sha256))
 }
 
 /// Funcao pura: a `version` que o contrato declara.
@@ -506,7 +524,12 @@ fn gravar_laudo(run: &mut Run, c: &Composicao) -> Result<(), String> {
     // responde.
     let versao = versao_do_yaml(&c.yaml_enriquecido).map_err(|e| format!("{e:#}"))?;
     let sha = tools::sha256_hex(&c.yaml_enriquecido);
-    let destino = caminho_do_laudo(&c.proposta.contrato, &versao, &sha);
+    let destino = caminho_do_laudo(
+        &c.proposta.contrato,
+        &versao,
+        &sha,
+        &sha_do_criterio(&c.laudo),
+    );
     let corpo = documento_do_laudo(&c.proposta, &c.laudo, &versao, &sha);
 
     let path = run.cfg.root.join(&destino);
@@ -1372,6 +1395,15 @@ classificacoes:
         classificar(&m, &catalogo(), "sha-cat")
     }
 
+    /// Um laudo com os shas do criterio escolhidos, para exercitar so o que
+    /// entra no nome do arquivo.
+    fn laudo_de_teste(gloss_sha: &str, cat_sha: &str) -> Laudo {
+        let mut l = laudo();
+        l.glossario_sha256 = gloss_sha.to_string();
+        l.catalogo_sha256 = cat_sha.to_string();
+        l
+    }
+
     fn confronto_de(yaml: &str) -> Vec<CampoDoGate> {
         let l = laudo();
         confrontar(&l.campos, &declaracao_do_yaml(yaml).unwrap())
@@ -1824,10 +1856,10 @@ classificacoes:
     // --- Onde o laudo e arquivado -----------------------------------------------
 
     #[test]
-    fn laudo_fica_ao_lado_do_contrato_com_versao_e_sha_no_nome() {
+    fn laudo_fica_ao_lado_do_contrato_com_versao_sha_e_criterio_no_nome() {
         assert_eq!(
-            caminho_do_laudo(ALVO, "1.2.0", "abcdef1234567890"),
-            "contracts/clientes/laudos/1.2.0-abcdef1.md"
+            caminho_do_laudo(ALVO, "1.2.0", "abcdef1234567890", "9876543210"),
+            "contracts/clientes/laudos/1.2.0-abcdef1-9876543.md"
         );
     }
 
@@ -1836,8 +1868,35 @@ classificacoes:
     #[test]
     fn contratos_diferentes_na_mesma_versao_nao_colidem() {
         assert_ne!(
-            caminho_do_laudo(ALVO, "1.0.0", "aaaaaaa1111"),
-            caminho_do_laudo(ALVO, "1.0.0", "bbbbbbb2222")
+            caminho_do_laudo(ALVO, "1.0.0", "aaaaaaa1111", "cccccccc"),
+            caminho_do_laudo(ALVO, "1.0.0", "bbbbbbb2222", "cccccccc")
+        );
+    }
+
+    /// O caso que o nome antigo nao cobria: **contrato identico**, criterio
+    /// novo. Sem o criterio no nome, a segunda emissao caia sobre a primeira e
+    /// a auditoria perdia justamente o par que queria comparar.
+    #[test]
+    fn mesmo_contrato_julgado_por_criterio_novo_nao_colide() {
+        assert_ne!(
+            caminho_do_laudo(ALVO, "1.0.0", "aaaaaaa1111", "cccccccc"),
+            caminho_do_laudo(ALVO, "1.0.0", "aaaaaaa1111", "dddddddd")
+        );
+    }
+
+    /// Glossario e catalogo entram os dois: mudar so o glossario troca o termo
+    /// de um campo, e isso e uma constatacao diferente ainda que o catalogo
+    /// esteja intacto.
+    #[test]
+    fn criterio_muda_com_glossario_ou_com_catalogo() {
+        let base = laudo_de_teste("gloss-1", "cat-1");
+        assert_ne!(
+            sha_do_criterio(&base),
+            sha_do_criterio(&laudo_de_teste("gloss-2", "cat-1"))
+        );
+        assert_ne!(
+            sha_do_criterio(&base),
+            sha_do_criterio(&laudo_de_teste("gloss-1", "cat-2"))
         );
     }
 
@@ -1868,6 +1927,6 @@ classificacoes:
         let contrato = include_str!("../../contracts/clientes/contract.odcs.yaml");
         let v = versao_do_yaml(contrato).unwrap();
         assert!(!v.is_empty());
-        assert!(caminho_do_laudo(ALVO, &v, "abcdef1234567890").ends_with(".md"));
+        assert!(caminho_do_laudo(ALVO, &v, "abcdef1234567890", "1234567").ends_with(".md"));
     }
 }

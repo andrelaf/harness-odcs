@@ -74,6 +74,8 @@ enum Cmd {
         #[arg(long, value_name = "ARQUIVO")]
         saida: Option<String>,
     },
+    /// Escreve no repositorio o que o `check` propoe: contrato e laudo.
+    Aplicar,
     /// Desenha um relatorio ja produzido pelo `check`, sem reexecuta-lo.
     Report {
         /// O `report.json` gravado por `check --saida`.
@@ -135,6 +137,7 @@ fn main() {
             saida.as_deref(),
             cli.json,
         ),
+        Cmd::Aplicar => cmd_aplicar(&cfg, cli.contrato.as_deref()),
         Cmd::Report { arquivo, formato } => cmd_report(&cfg, arquivo, *formato, cli.json),
         Cmd::Status => cmd_status(&cfg, cli.json),
         Cmd::Verify => cmd_single(&cfg, Phase::Verify, cli.contrato.as_deref()),
@@ -183,6 +186,37 @@ fn cmd_check(
 
     desenhar(cfg, &r, formato)?;
     Ok(r.veredito.exit().code())
+}
+
+/// `aplicar` — escreve o que o `check` propoe, e devolve o veredito.
+///
+/// O exit code continua sendo o do contrato, e nao o da escrita: aplicar com
+/// gate aberto e legitimo e sai `5`, porque o que falta e a decisao humana, nao
+/// o arquivo.
+fn cmd_aplicar(cfg: &Config, escolha: Option<&str>) -> Result<i32> {
+    let (r, escritos) = check::aplicar(cfg, escolha)?;
+    if escritos.is_empty() {
+        // Nada mudou, entao o veredito da verificacao continua valendo e vale
+        // imprimi-lo: e a resposta a pergunta "e agora, esta tudo aplicado?".
+        println!(
+            "nada a aplicar — o contrato e o laudo desta verificacao ja estao no repositorio\n"
+        );
+        check::imprimir(&r);
+        return Ok(r.veredito.exit().code());
+    }
+
+    for e in &escritos {
+        println!("escrito    {e}");
+    }
+    println!(
+        "\nCommite junto da mudanca do contrato: o laudo e o que responde por que cada\n\
+         campo foi classificado assim, e sob qual criterio."
+    );
+    // O veredito nao e impresso aqui de proposito. Ele foi calculado **antes**
+    // da escrita, entao ainda acusa a ausencia dos arquivos que acabaram de ser
+    // criados — imprimi-lo diria FAIL logo depois de resolver o motivo do FAIL.
+    println!("\nConfira com `check`.");
+    Ok(Exit::Pass.code())
 }
 
 /// Desenha um relatorio ja produzido. **Sai sempre com `0`**: um renderizador

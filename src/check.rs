@@ -40,7 +40,7 @@ use std::fs;
 /// GitHub e Azure DevOps consomem **este** arquivo; o que muda entre os dois e
 /// so o renderizador. Sem ele no meio, cada plataforma leria o texto do console
 /// e a portabilidade viraria trabalho de expressao regular.
-pub const SCHEMA_VERSION: u32 = 1;
+pub const SCHEMA_VERSION: u32 = 2;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -91,6 +91,16 @@ pub struct Propostas {
     pub laudo: Option<String>,
     /// Onde o laudo **iria** morar quando alguem aceitar a proposta.
     pub laudo_destino: Option<String>,
+    /// Os anexos do laudo, versionados ao lado dele: a decisao em JSON e a
+    /// prova de validade ODCS do contrato commitado.
+    #[serde(default)]
+    pub anexo_proposta: Option<String>,
+    #[serde(default)]
+    pub anexo_proposta_destino: Option<String>,
+    #[serde(default)]
+    pub anexo_lint: Option<String>,
+    #[serde(default)]
+    pub anexo_lint_destino: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -167,6 +177,109 @@ pub fn executar(cfg: &Config, escolha: Option<&str>) -> Result<Relatorio> {
     )?;
 
     Ok(relatorio)
+}
+
+/// Aplica no repositorio o que o `check` propoe: o contrato enriquecido e o
+/// laudo.
+///
+/// E a contraparte de `check` ser somente-leitura. O CI **propoe** e nunca
+/// escreve — nao tem permissao e nao deveria ter, porque o que entra no
+/// repositorio precisa passar por revisao. Quem aplica e quem abriu o pull
+/// request, na propria maquina, e o resultado vai no diff onde o revisor le.
+///
+/// Escreve apenas o que ja esta correto: se a verificacao reprovou por defeito
+/// real — lint, nome, composicao —, nao ha proposta valida a aplicar, e aplicar
+/// mesmo assim gravaria no repositorio um contrato que o proximo `check`
+/// recusaria.
+///
+/// **Gate aberto nao impede.** O laudo registra as lacunas como pendencia, e e
+/// exatamente esse documento que o revisor precisa ver no diff antes de
+/// aprovar. Esperar o gate fechar para emitir o laudo deixaria o pull request
+/// sem o unico artefato que descreve o que esta sendo decidido.
+pub fn aplicar(cfg: &Config, escolha: Option<&str>) -> Result<(Relatorio, Vec<String>)> {
+    let r = executar(cfg, escolha)?;
+
+    // Defeito que nao seja de aplicacao e impeditivo: o resto do relatorio
+    // descreve uma proposta que nasceu de entrada invalida.
+    let impeditivos: Vec<&Defeito> = r
+        .defeitos
+        .iter()
+        .filter(|d| d.etapa != "aplicacao")
+        .collect();
+    if !impeditivos.is_empty() {
+        anyhow::bail!(
+            "nada a aplicar: a verificacao reprovou em {}",
+            impeditivos
+                .iter()
+                .map(|d| d.etapa.as_str())
+                .collect::<Vec<_>>()
+                .join(", ")
+        );
+    }
+
+    let mut escritos = Vec::new();
+
+    if let Some(origem) = &r.propostas.contrato {
+        let novo = fs::read_to_string(cfg.root.join(origem))
+            .with_context(|| format!("lendo a proposta em {origem}"))?;
+        let destino = cfg.root.join(&r.contrato);
+        let igual = fs::read_to_string(&destino).is_ok_and(|atual| atual == novo);
+        if !igual {
+            fs::write(&destino, &novo).with_context(|| format!("escrevendo {}", r.contrato))?;
+            escritos.push(r.contrato.clone());
+        }
+    }
+
+    if let (Some(origem), Some(destino)) = (&r.propostas.laudo, &r.propostas.laudo_destino) {
+        let corpo = fs::read_to_string(cfg.root.join(origem))
+            .with_context(|| format!("lendo o laudo em {origem}"))?;
+        let path = cfg.root.join(destino);
+        if let Some(dir) = path.parent() {
+            fs::create_dir_all(dir).with_context(|| format!("criando {}", dir.display()))?;
+        }
+        // Laudo emitido nao se sobrescreve. Identico nao e escrita — o
+        // documento e deterministico, entao mesmo conteudo no mesmo caminho
+        // significa que ele ja existe.
+        match fs::read_to_string(&path) {
+            Ok(atual) if atual == corpo => {}
+            Ok(_) => anyhow::bail!(
+                "o laudo `{destino}` ja existe com outro conteudo. \
+                 O nome carrega contrato e criterio, entao isto indica algo \
+                 fora do lugar — nao sobrescreva sem investigar"
+            ),
+            Err(_) => {
+                fs::write(&path, &corpo).with_context(|| format!("escrevendo {destino}"))?;
+                escritos.push(destino.clone());
+            }
+        }
+    }
+
+    // Os anexos, ao contrario do laudo, **sao** reescritos quando divergem: eles
+    // nao sao constatacao emitida, sao a mesma constatacao em outro formato. Se
+    // o conteudo mudou com o mesmo nome, o laudo ao lado ja teria travado antes.
+    for (origem, destino) in [
+        (
+            &r.propostas.anexo_proposta,
+            &r.propostas.anexo_proposta_destino,
+        ),
+        (&r.propostas.anexo_lint, &r.propostas.anexo_lint_destino),
+    ] {
+        let (Some(origem), Some(destino)) = (origem, destino) else {
+            continue;
+        };
+        let corpo = fs::read_to_string(cfg.root.join(origem))
+            .with_context(|| format!("lendo o anexo em {origem}"))?;
+        let path = cfg.root.join(destino);
+        if let Some(dir) = path.parent() {
+            fs::create_dir_all(dir).with_context(|| format!("criando {}", dir.display()))?;
+        }
+        if !fs::read_to_string(&path).is_ok_and(|atual| atual == corpo) {
+            fs::write(&path, &corpo).with_context(|| format!("escrevendo {destino}"))?;
+            escritos.push(destino.clone());
+        }
+    }
+
+    Ok((r, escritos))
 }
 
 /// Rele um relatorio ja gravado, para render sem reexecutar.
@@ -307,6 +420,56 @@ fn montar(run: &mut Run, alvo: &str) -> Result<Relatorio> {
         }),
     }
 
+    // Os anexos do laudo, gravados em `evidence/` como tudo o mais que o
+    // `check` produz — e aplicados dali, se alguem aceitar.
+    let anexos = Anexos {
+        proposta: serde_json::to_string_pretty(&c.proposta).unwrap_or_default(),
+        lint: fs::read_to_string(
+            run.cfg
+                .root
+                .join(format!("evidence/{run_id}/f4-lint-enriquecido.json")),
+        )
+        .ok()
+        .as_deref()
+        .and_then(lint_normalizado),
+    };
+    if let Some(destino) = &propostas.laudo_destino {
+        let (p, l) = Anexos::destinos(destino);
+        let base = format!("evidence/{run_id}");
+        if fs::write(
+            run.cfg.root.join(format!("{base}/laudo.proposta.json")),
+            &anexos.proposta,
+        )
+        .is_ok()
+        {
+            propostas.anexo_proposta = Some(format!("{base}/laudo.proposta.json"));
+            propostas.anexo_proposta_destino = Some(p);
+        }
+        if let Some(corpo) = &anexos.lint
+            && fs::write(run.cfg.root.join(format!("{base}/laudo.lint.json")), corpo).is_ok()
+        {
+            propostas.anexo_lint = Some(format!("{base}/laudo.lint.json"));
+            propostas.anexo_lint_destino = Some(l);
+        }
+    }
+
+    // --- 5. A proposta esta aplicada?
+    //
+    // Sem isto, um pull request podia ser aprovado com o comentario do laudo na
+    // tela e o laudo **fora** do repositorio — foi o que aconteceu no primeiro
+    // merge real. O comentario e efemero; o que fica e o commit.
+    //
+    // O laudo tem de ser versionado ao lado do contrato porque e ele que
+    // responde "quem classificou este campo assim, e sob qual criterio". Um
+    // laudo que so existiu num comentario de PR nao serve a auditoria nenhuma.
+    for m in aplicacao_pendente(run, &c, &propostas, &anexos) {
+        defeitos.push(Defeito {
+            etapa: "aplicacao".to_string(),
+            arquivo: alvo.to_string(),
+            mensagem: m,
+        });
+    }
+
     // Gate aberto nao e defeito: nada esta errado, falta decisao humana. Sao
     // exit codes diferentes de proposito — reprovar um PR por lacuna diria a
     // quem o abriu que ele errou, quando o que falta e alguem decidir.
@@ -338,6 +501,139 @@ fn montar(run: &mut Run, alvo: &str) -> Result<Relatorio> {
 
 /// O laudo que **seria** emitido, gravado em `evidence/` junto do caminho onde
 /// ele iria morar. `check` nao escreve em `contracts/`.
+/// Os anexos do laudo: o que fica versionado ao lado dele, para maquina.
+///
+/// O laudo responde a um humano. Estes dois respondem a uma consulta e a uma
+/// auditoria automatizada:
+///
+///   `.proposta.json`  a decisao inteira — campos, termos, classificacao,
+///                     gate, versoes e sha256 dos insumos.
+///   `.lint.json`      a prova de que o contrato **commitado** e ODCS valido,
+///                     e sob qual versao do motor.
+///
+/// **Nem toda saida de ferramenta merece ser versionada.** O que sobra em
+/// `evidence/<run_id>/` — stdout bruto, lint da fonte antes do enriquecimento,
+/// intermediarios — e regeneravel a partir do contrato e do criterio, e
+/// commitar tudo faria o repositorio crescer um diretorio por push sem
+/// acrescentar nada que o laudo ja nao prove. `evidence/` continua sendo
+/// artefato do job, com retencao propria.
+///
+/// O criterio de corte e **determinismo**: o que entra tem de produzir os
+/// mesmos bytes para o mesmo contrato e o mesmo criterio. Sem isso, cada
+/// execucao sujaria o diff e a comparacao de conteudo deixaria de funcionar.
+struct Anexos {
+    proposta: String,
+    lint: Option<String>,
+}
+
+impl Anexos {
+    /// `<laudo>.md` -> `<laudo>.proposta.json` e `<laudo>.lint.json`.
+    fn destinos(laudo_destino: &str) -> (String, String) {
+        let base = laudo_destino.strip_suffix(".md").unwrap_or(laudo_destino);
+        (format!("{base}.proposta.json"), format!("{base}.lint.json"))
+    }
+}
+
+/// O lint do enriquecido, sem o que muda a cada execucao.
+///
+/// O relatorio do `datacontract-cli` traz `runId`, `timestampStart`,
+/// `timestampEnd` e um `logs` com hora — todos diferentes a cada run. Versionar
+/// o arquivo cru faria o mesmo contrato produzir um diff por push, e o proprio
+/// harness nao conseguiria comparar o que esta no repositorio com o que
+/// propoe.
+///
+/// O que fica e o que responde a auditoria: o veredito, os checks e a versao do
+/// motor que os produziu.
+fn lint_normalizado(bruto: &str) -> Option<String> {
+    let mut v: serde_json::Value = serde_json::from_str(bruto).ok()?;
+    let o = v.as_object_mut()?;
+    for volatil in ["runId", "timestampStart", "timestampEnd", "logs"] {
+        o.remove(volatil);
+    }
+    serde_json::to_string_pretty(&v).ok()
+}
+
+/// O que ainda falta estar **no repositorio**, e nao apenas proposto.
+///
+/// Duas perguntas, e as duas sao de conteudo, nao de existencia: o contrato no
+/// disco e igual ao enriquecido? o laudo do destino existe e e igual ao
+/// emitido? Comparar conteudo so e possivel porque os dois documentos sao
+/// deterministicos — mesmo contrato, mesmo glossario e mesmo catalogo produzem
+/// os mesmos bytes, sem data e sem `run_id` dentro.
+///
+/// O enriquecimento e ponto fixo: aplicar e verificar de novo devolve o mesmo
+/// arquivo. Sem isso, exigir a aplicacao criaria uma perseguicao — cada
+/// aplicacao mudaria o sha e pediria outra.
+fn aplicacao_pendente(
+    run: &Run,
+    c: &f4_gate::Composicao,
+    propostas: &Propostas,
+    anexos: &Anexos,
+) -> Vec<String> {
+    let mut faltas = Vec::new();
+
+    match fs::read_to_string(run.cfg.root.join(&c.proposta.contrato)) {
+        Ok(atual) if atual == c.yaml_enriquecido => {}
+        Ok(_) => faltas.push(format!(
+            "o contrato nao esta com a classificacao aplicada — \
+             `{}` difere do enriquecido que esta verificacao produz. \
+             Aplique com `aplicar` e commite",
+            c.proposta.contrato
+        )),
+        Err(e) => faltas.push(format!("contrato ilegivel para comparacao ({e})")),
+    }
+
+    // Laudo so e cobrado depois do contrato: com o contrato desatualizado, o
+    // destino do laudo e outro, e cobrar os dois produziria duas mensagens para
+    // uma causa.
+    if !faltas.is_empty() {
+        return faltas;
+    }
+
+    let Some(destino) = propostas.laudo_destino.as_deref() else {
+        return faltas;
+    };
+    let corpo = propostas
+        .laudo
+        .as_deref()
+        .and_then(|p| fs::read_to_string(run.cfg.root.join(p)).ok());
+    let Some(corpo) = corpo else {
+        return faltas;
+    };
+
+    match fs::read_to_string(run.cfg.root.join(destino)) {
+        Ok(atual) if atual == corpo => {}
+        Ok(_) => faltas.push(format!(
+            "o laudo `{destino}` existe mas nao corresponde a este criterio. \
+             O nome do laudo carrega contrato e criterio, entao isto nao deveria \
+             acontecer — nao sobrescreva: investigue"
+        )),
+        Err(_) => faltas.push(format!(
+            "o laudo `{destino}` nao esta no repositorio. \
+             Ele e o registro de quem classificou o que, e sob qual criterio — \
+             um laudo que so existiu no comentario do pull request nao serve a \
+             auditoria. Emita com `aplicar` e commite junto"
+        )),
+    }
+
+    let (p_dest, l_dest) = Anexos::destinos(destino);
+    for (dest, esperado) in [
+        (p_dest, Some(&anexos.proposta)),
+        (l_dest, anexos.lint.as_ref()),
+    ] {
+        let Some(esperado) = esperado else { continue };
+        match fs::read_to_string(run.cfg.root.join(&dest)) {
+            Ok(atual) if &atual == esperado => {}
+            Ok(_) => faltas.push(format!("`{dest}` diverge do que esta verificacao produz")),
+            Err(_) => faltas.push(format!(
+                "`{dest}` nao esta no repositorio — e o anexo do laudo que \
+                 responde a consulta automatizada. Emita com `aplicar`"
+            )),
+        }
+    }
+    faltas
+}
+
 fn laudo_proposto(
     run: &mut Run,
     c: &f4_gate::Composicao,
@@ -345,7 +641,12 @@ fn laudo_proposto(
 ) -> Result<(String, String), String> {
     let versao = f4_gate::versao_do_yaml(&c.yaml_enriquecido).map_err(|e| format!("{e:#}"))?;
     let sha = crate::tools::sha256_hex(&c.yaml_enriquecido);
-    let destino = f4_gate::caminho_do_laudo(&c.proposta.contrato, &versao, &sha);
+    let destino = f4_gate::caminho_do_laudo(
+        &c.proposta.contrato,
+        &versao,
+        &sha,
+        &f4_gate::sha_do_criterio(&c.laudo),
+    );
     let corpo = f4_gate::documento_do_laudo(&c.proposta, &c.laudo, &versao, &sha);
 
     let onde = format!("evidence/{run_id}/laudo.md");
