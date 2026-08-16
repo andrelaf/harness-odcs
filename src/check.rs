@@ -97,10 +97,6 @@ pub struct Propostas {
     pub anexo_proposta: Option<String>,
     #[serde(default)]
     pub anexo_proposta_destino: Option<String>,
-    #[serde(default)]
-    pub anexo_lint: Option<String>,
-    #[serde(default)]
-    pub anexo_lint_destino: Option<String>,
     /// O contrato desenhado em HTML — para quem decide sobre o dado e nao le
     /// YAML. Vai no mesmo commit, entao corresponde ao contrato deste PR.
     #[serde(default)]
@@ -286,7 +282,6 @@ pub fn aplicar(cfg: &Config, escolha: Option<&str>) -> Result<(Relatorio, Vec<St
             &r.propostas.anexo_proposta,
             &r.propostas.anexo_proposta_destino,
         ),
-        (&r.propostas.anexo_lint, &r.propostas.anexo_lint_destino),
         (&r.propostas.anexo_html, &r.propostas.anexo_html_destino),
     ] {
         let (Some(origem), Some(destino)) = (origem, destino) else {
@@ -449,18 +444,10 @@ fn montar(run: &mut Run, alvo: &str) -> Result<Relatorio> {
     // `check` produz — e aplicados dali, se alguem aceitar.
     let anexos = Anexos {
         proposta: serde_json::to_string_pretty(&c.proposta).unwrap_or_default(),
-        lint: fs::read_to_string(
-            run.cfg
-                .root
-                .join(format!("evidence/{run_id}/f4-lint-enriquecido.json")),
-        )
-        .ok()
-        .as_deref()
-        .and_then(lint_normalizado),
         html: html_do_enriquecido(run, &run_id, &c.proposta.contrato_sha256),
     };
     if let Some(destino) = &propostas.laudo_destino {
-        let (p, l, h) = Anexos::destinos(destino);
+        let (p, h) = Anexos::destinos(destino);
         let base = format!("evidence/{run_id}");
         if fs::write(
             run.cfg.root.join(format!("{base}/laudo.proposta.json")),
@@ -470,12 +457,6 @@ fn montar(run: &mut Run, alvo: &str) -> Result<Relatorio> {
         {
             propostas.anexo_proposta = Some(format!("{base}/laudo.proposta.json"));
             propostas.anexo_proposta_destino = Some(p);
-        }
-        if let Some(corpo) = &anexos.lint
-            && fs::write(run.cfg.root.join(format!("{base}/laudo.lint.json")), corpo).is_ok()
-        {
-            propostas.anexo_lint = Some(format!("{base}/laudo.lint.json"));
-            propostas.anexo_lint_destino = Some(l);
         }
         if let Some(corpo) = &anexos.html
             && fs::write(run.cfg.root.join(format!("{base}/laudo.html")), corpo).is_ok()
@@ -555,19 +536,14 @@ fn montar(run: &mut Run, alvo: &str) -> Result<Relatorio> {
 /// execucao sujaria o diff e a comparacao de conteudo deixaria de funcionar.
 struct Anexos {
     proposta: String,
-    lint: Option<String>,
     html: Option<String>,
 }
 
 impl Anexos {
     /// `<laudo>.md` -> os anexos, todos com o mesmo nome-base.
-    fn destinos(laudo_destino: &str) -> (String, String, String) {
+    fn destinos(laudo_destino: &str) -> (String, String) {
         let base = laudo_destino.strip_suffix(".md").unwrap_or(laudo_destino);
-        (
-            format!("{base}.proposta.json"),
-            format!("{base}.lint.json"),
-            format!("{base}.html"),
-        )
+        (format!("{base}.proposta.json"), format!("{base}.html"))
     }
 }
 
@@ -596,27 +572,27 @@ fn html_normalizado(bruto: &str, sha_do_contrato: &str) -> Option<String> {
     ))
 }
 
-/// O lint do enriquecido, sem o que muda a cada execucao.
+/// O que ainda falta estar **no repositorio**, e nao apenas proposto.
 ///
-/// O relatorio do `datacontract-cli` traz `runId`, `timestampStart`,
-/// `timestampEnd` e um `logs` com hora — todos diferentes a cada run. Versionar
-/// o arquivo cru faria o mesmo contrato produzir um diff por push, e o proprio
-/// harness nao conseguiria comparar o que esta no repositorio com o que
-/// propoe.
+/// Duas perguntas, e as duas sao de conteudo, nao de existencia: o contrato no
+/// disco e igual ao enriquecido? o laudo do destino existe e e igual ao
+/// emitido? Comparar conteudo so e possivel porque os dois documentos sao
+/// deterministicos — mesmo contrato, mesmo glossario e mesmo catalogo produzem
+/// os mesmos bytes, sem data e sem `run_id` dentro.
 ///
-/// O que fica e o que responde a auditoria: o veredito, os checks e a versao do
-/// motor que os produziu.
+/// O enriquecimento e ponto fixo: aplicar e verificar de novo devolve o mesmo
+/// arquivo. Sem isso, exigir a aplicacao criaria uma perseguicao — cada
+/// aplicacao mudaria o sha e pediria outra.
 /// Desenha o contrato **enriquecido** em HTML, para quem nao le YAML.
 ///
-/// Quem trabalha com produto ou com o dado em si precisa saber o que ha no
+/// Quem trabalha com produto ou responde pelo dado precisa saber o que ha no
 /// dataset sem abrir um `.yaml` de trezentas linhas. O desenho vai ao lado do
 /// laudo, no mesmo commit, e por isso corresponde exatamente ao contrato que
 /// aquele pull request esta propondo — um HTML publicado em outro lugar
 /// envelheceria em silencio.
 ///
-/// Custa uma partida de container a mais por verificacao. E o item mais caro
-/// que o `check` faz depois do lint, e vale porque troca "abra o YAML e
-/// interprete" por "abra e leia" para quem decide.
+/// Custa uma partida de container a mais por verificacao, e vale porque troca
+/// "abra o YAML e interprete" por "abra e leia" para quem decide.
 ///
 /// Falha nao reprova: um desenho ausente e menos grave que uma verificacao
 /// interrompida, e o veredito do contrato nao depende dele.
@@ -636,26 +612,6 @@ fn html_do_enriquecido(run: &mut Run, run_id: &str, sha: &str) -> Option<String>
     html_normalizado(&bruto, sha)
 }
 
-fn lint_normalizado(bruto: &str) -> Option<String> {
-    let mut v: serde_json::Value = serde_json::from_str(bruto).ok()?;
-    let o = v.as_object_mut()?;
-    for volatil in ["runId", "timestampStart", "timestampEnd", "logs"] {
-        o.remove(volatil);
-    }
-    serde_json::to_string_pretty(&v).ok()
-}
-
-/// O que ainda falta estar **no repositorio**, e nao apenas proposto.
-///
-/// Duas perguntas, e as duas sao de conteudo, nao de existencia: o contrato no
-/// disco e igual ao enriquecido? o laudo do destino existe e e igual ao
-/// emitido? Comparar conteudo so e possivel porque os dois documentos sao
-/// deterministicos — mesmo contrato, mesmo glossario e mesmo catalogo produzem
-/// os mesmos bytes, sem data e sem `run_id` dentro.
-///
-/// O enriquecimento e ponto fixo: aplicar e verificar de novo devolve o mesmo
-/// arquivo. Sem isso, exigir a aplicacao criaria uma perseguicao — cada
-/// aplicacao mudaria o sha e pediria outra.
 fn aplicacao_pendente(
     run: &Run,
     c: &f4_gate::Composicao,
@@ -708,10 +664,9 @@ fn aplicacao_pendente(
         )),
     }
 
-    let (p_dest, l_dest, h_dest) = Anexos::destinos(destino);
+    let (p_dest, h_dest) = Anexos::destinos(destino);
     for (dest, esperado) in [
         (p_dest, Some(&anexos.proposta)),
-        (l_dest, anexos.lint.as_ref()),
         (h_dest, anexos.html.as_ref()),
     ] {
         let Some(esperado) = esperado else { continue };
