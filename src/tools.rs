@@ -85,6 +85,33 @@ pub fn run(program: &str, args: &[&str], evidence_dir: &Path, label: &str) -> Re
     })
 }
 
+/// Cria um diretorio de evidencia onde o **container** tambem consiga escrever.
+///
+/// `datacontract-cli` e uma imagem distroless que roda como `nonroot`, e o
+/// `--output` do lint e do export sai de dentro dela. Num runner Linux o
+/// diretorio nasce do usuario do CI com modo 755, o container nao consegue criar
+/// o arquivo, e o CLI reprova com exit 1 **sem deixar relatorio** — sintoma tres
+/// passos distante da causa, e que acusa o contrato quando o problema e de
+/// permissao.
+///
+/// No Docker Desktop (Windows, macOS) a traducao de sistema de arquivos ignora
+/// dono e modo, entao isto nunca aparece na maquina de quem desenvolve. E o tipo
+/// de divergencia que so o primeiro pull request encontra.
+pub fn criar_dir_de_evidencia(dir: &Path) -> Result<()> {
+    fs::create_dir_all(dir).with_context(|| format!("criando {}", dir.display()))?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        // 0o777 porque nao ha como saber o uid do container antes de roda-lo, e
+        // o `--user` do docker resolveria isto ao preco de um uid sem entrada em
+        // `/etc/passwd` dentro de uma imagem distroless. O diretorio e efemero e
+        // vive sob `evidence/`, que continua 755.
+        fs::set_permissions(dir, fs::Permissions::from_mode(0o777))
+            .with_context(|| format!("ajustando permissoes de {}", dir.display()))?;
+    }
+    Ok(())
+}
+
 fn persist_evidence(
     dir: &Path,
     label: &str,
@@ -93,7 +120,7 @@ fn persist_evidence(
     stdout: &str,
     stderr: &str,
 ) -> Result<Option<PathBuf>> {
-    fs::create_dir_all(dir).with_context(|| format!("criando {}", dir.display()))?;
+    criar_dir_de_evidencia(dir)?;
     let path = dir.join(format!("{label}.txt"));
     let body = format!(
         "# comando: {program} {}\n# --- stdout ---\n{stdout}\n# --- stderr ---\n{stderr}",

@@ -122,8 +122,7 @@ pub fn executar(cfg: &Config, escolha: Option<&str>) -> Result<Relatorio> {
     let run_id = trace::new_run_id();
     let tracer = Tracer::open(&cfg.trace_dir(), &run_id)?;
     let evidence_dir = cfg.evidence_dir().join(&run_id);
-    fs::create_dir_all(&evidence_dir)
-        .with_context(|| format!("criando {}", evidence_dir.display()))?;
+    crate::tools::criar_dir_de_evidencia(&evidence_dir)?;
 
     let mut run = Run {
         cfg: cfg.clone(),

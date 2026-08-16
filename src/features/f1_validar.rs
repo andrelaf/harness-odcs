@@ -52,8 +52,8 @@ pub fn implement(run: &mut Run) -> Outcome {
 /// quando passa, deixa o relatorio legivel ao lado.
 pub fn verify(run: &mut Run) -> Outcome {
     let destino = format!("evidence/{}/f1-lint.json", run.tracer.run_id());
-    if let Err(e) = fs::create_dir_all(&run.evidence_dir) {
-        return Outcome::Fail(format!("criando {}: {e}", run.evidence_dir.display()));
+    if let Err(e) = tools::criar_dir_de_evidencia(&run.evidence_dir) {
+        return Outcome::Fail(format!("{e:#}"));
     }
 
     // A convencao de nome e conferida antes do container: e barata, e um nome
