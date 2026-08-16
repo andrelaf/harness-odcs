@@ -264,8 +264,8 @@ pub struct Campo {
 /// a prova de que a extracao se repete. Um destino unico faria a segunda fase
 /// apagar a prova da primeira.
 pub fn extrair(run: &mut Run, feature: &str, fase: &str) -> Result<Vec<Campo>, String> {
-    if let Err(e) = fs::create_dir_all(&run.evidence_dir) {
-        return Err(format!("criando {}: {e}", run.evidence_dir.display()));
+    if let Err(e) = tools::criar_dir_de_evidencia(&run.evidence_dir) {
+        return Err(format!("{e:#}"));
     }
 
     let destino = format!(
