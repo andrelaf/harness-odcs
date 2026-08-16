@@ -1,0 +1,130 @@
+{
+  "contrato": "contracts/pedidos/contract.odcs.yaml",
+  "contrato_sha256": "1b5c94aa1284befbce79b184f4e16c82e18e1291c409942acbe76291447f3a67",
+  "glossario_versao": "1.0.0",
+  "catalogo_versao": "1.0.0",
+  "resumo": {
+    "campos": 5,
+    "classificados": 0,
+    "primeira_classificacao": 0,
+    "inalterados": 0,
+    "lacunas": 5,
+    "reclassificacoes": 0,
+    "conflitos": 0
+  },
+  "gate_sha256": "8c80fae2672176a1c8abe4849e0bce24c3e1ad34b3ea5453f4cf83ec5eeab124",
+  "gate": [
+    {
+      "tipo": "lacuna",
+      "campo": "_id",
+      "detalhe": "campo sem termo no glossario — segue sem classificacao no contrato ate decisao humana"
+    },
+    {
+      "tipo": "lacuna",
+      "campo": "cliente",
+      "detalhe": "campo sem termo no glossario — segue sem classificacao no contrato ate decisao humana"
+    },
+    {
+      "tipo": "lacuna",
+      "campo": "data_pedido",
+      "detalhe": "campo sem termo no glossario — segue sem classificacao no contrato ate decisao humana"
+    },
+    {
+      "tipo": "lacuna",
+      "campo": "entregas",
+      "detalhe": "campo sem termo no glossario — segue sem classificacao no contrato ate decisao humana"
+    },
+    {
+      "tipo": "lacuna",
+      "campo": "valor_total",
+      "detalhe": "campo sem termo no glossario — segue sem classificacao no contrato ate decisao humana"
+    }
+  ],
+  "campos": [
+    {
+      "campo": "_id",
+      "termo": null,
+      "mudanca": "lacuna",
+      "proposto": {
+        "classification": null,
+        "pii": null,
+        "sensivel": null
+      },
+      "declarado": {
+        "classification": null,
+        "pii": null,
+        "sensivel": null
+      },
+      "justificativa": "campo sem termo no glossario (lacuna de F2) — classificar exige decisao humana",
+      "referencia": null
+    },
+    {
+      "campo": "cliente",
+      "termo": null,
+      "mudanca": "lacuna",
+      "proposto": {
+        "classification": null,
+        "pii": null,
+        "sensivel": null
+      },
+      "declarado": {
+        "classification": null,
+        "pii": null,
+        "sensivel": null
+      },
+      "justificativa": "campo sem termo no glossario (lacuna de F2) — classificar exige decisao humana",
+      "referencia": null
+    },
+    {
+      "campo": "data_pedido",
+      "termo": null,
+      "mudanca": "lacuna",
+      "proposto": {
+        "classification": null,
+        "pii": null,
+        "sensivel": null
+      },
+      "declarado": {
+        "classification": null,
+        "pii": null,
+        "sensivel": null
+      },
+      "justificativa": "campo sem termo no glossario (lacuna de F2) — classificar exige decisao humana",
+      "referencia": null
+    },
+    {
+      "campo": "entregas",
+      "termo": null,
+      "mudanca": "lacuna",
+      "proposto": {
+        "classification": null,
+        "pii": null,
+        "sensivel": null
+      },
+      "declarado": {
+        "classification": null,
+        "pii": null,
+        "sensivel": null
+      },
+      "justificativa": "campo sem termo no glossario (lacuna de F2) — classificar exige decisao humana",
+      "referencia": null
+    },
+    {
+      "campo": "valor_total",
+      "termo": null,
+      "mudanca": "lacuna",
+      "proposto": {
+        "classification": null,
+        "pii": null,
+        "sensivel": null
+      },
+      "declarado": {
+        "classification": null,
+        "pii": null,
+        "sensivel": null
+      },
+      "justificativa": "campo sem termo no glossario (lacuna de F2) — classificar exige decisao humana",
+      "referencia": null
+    }
+  ]
+}

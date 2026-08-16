@@ -1,0 +1,33 @@
+# Quem responde por cada dominio de dado.
+#
+# Com `Require review from Code Owners` ligado na branch protection, o GitHub
+# escolhe o revisor pelo caminho do arquivo e o merge nao acontece sem ele. E o
+# que faz a aprovacao ser mecanica em vez de social.
+#
+# Substitua os times pelos da sua organizacao. **Time que nao existe nao bloqueia
+# nada** — e a falha mais silenciosa deste arquivo.
+#
+# Note o que NAO esta aqui: glossario e catalogo de classificacao. Eles nao
+# moram neste repositorio, e por isso ninguem que escreve contrato pode
+# altera-los para fechar a propria lacuna. A separacao e estrutural, e nao
+# depende deste arquivo estar bem preenchido.
+
+# Padrao. Sem uma linha coringa, caminho nao coberto nao exige revisor nenhum.
+*                        @sua-org/plataforma-dados
+
+# --- Um dono por dominio de dado ---------------------------------------------
+#
+# E este nivel que justifica `contracts/<dominio>/<contrato>/`. Sem ele, ou uma
+# pessoa aprova todo contrato da empresa, ou esta lista cresce um item por
+# contrato ate ninguem mais manter.
+/contracts/clientes/     @sua-org/dominio-clientes
+# /contracts/pagamentos/   @sua-org/dominio-pagamentos
+# /contracts/credito/      @sua-org/dominio-credito
+
+# --- A versao do criterio ----------------------------------------------------
+#
+# Subir `harness.lock` pode mudar a classificacao de todo campo de todo contrato
+# sem que nenhum contrato mude. E a alteracao de maior alcance possivel neste
+# repositorio, e por isso tem dono proprio — nao o dono do dominio.
+/harness.lock            @sua-org/plataforma-dados @sua-org/privacidade
+/.github/                @sua-org/plataforma-dados

@@ -326,6 +326,15 @@ Semana 4 de 4. As quatro features rodam de ponta a ponta, a medição é derivad
 | Verificação em pull request — [`.github/`](.github/README.md) | pronta · `./run.sh check`, workflow e CODEOWNERS |
 | [`docs/git-flow.md`](docs/git-flow.md) — branch, PR e merge | pronto · convenção verificada no CI |
 | [`docs/distribuicao.md`](docs/distribuicao.md) — o pacote que sai daqui | pronto · `./scripts/package.sh`, release por tag |
+| [`docs/curso.md`](docs/curso.md) — o checklist do curso e o que ficou subutilizado | pronto |
+| [`docs/processo.md`](docs/processo.md) — o fluxo de produção, ponta a ponta | pronto |
+| [`docs/artefatos.md`](docs/artefatos.md) — pacote, container e tudo que é gerado | pronto |
+| [`docs/laudo.md`](docs/laudo.md) — como o laudo nasce e o que o sustenta | pronto |
+| [`docs/cobertura.md`](docs/cobertura.md) — **o limite: contrato aninhado não é coberto** | medido |
+| [`docs/portabilidade.md`](docs/portabilidade.md) — a prova, e o que ela custou | pronto |
+| [`docs/bootstrap-repo-contratos.md`](docs/bootstrap-repo-contratos.md) — criar o repo de contratos do zero | pronto |
+| [`BACKLOG-FUTURO.md`](BACKLOG-FUTURO.md) — o que ficou de fora, e por quê | pronto |
+| `templates/repo-de-contratos/` — workflow, CODEOWNERS, PR template, Azure pipeline | pronto |
 | Repositório de contratos consumindo o pacote | [`andrelaf/data-contracts`](https://github.com/andrelaf/data-contracts) · sem Rust, sem vocabulário |
 | Azure DevOps com grupos do AD como aprovadores | **previsto, não construído** · porta descrita em [`.github/README.md`](.github/README.md#portar-para-azure-devops) |
 | [`docs/decisao.md`](docs/decisao.md) — onde se paga e onde perde | pronto |
@@ -373,5 +382,6 @@ state/                    feature-list.json, progress.json, gate-pendente.json, 
 trace/                    <run_id>.jsonl, append-only
 metrics/                  metrics.jsonl — derivado de trace/, regenerável
 evidence/                 saída bruta das ferramentas, por run
-docs/                     brief, contexto, specs, git flow, distribuição, decisão e demo
+docs/                     brief, contexto, specs, processo, laudo, cobertura, decisão e demo
+templates/                o repositório de contratos inteiro, pronto para materializar
 ```

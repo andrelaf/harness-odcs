@@ -1,0 +1,136 @@
+# Verificacao de contrato de dados em pull request — Azure DevOps.
+#
+# Irmao de `.github/workflows/contrato-pr.yml`, e deliberadamente parecido com
+# ele: os dois chamam **os mesmos comandos**, na mesma ordem, e nenhum dos dois
+# decide nada. Toda a politica esta no binario, testada la, e roda igual na
+# maquina de quem escreve o contrato.
+#
+# E por isso que a porta entre as duas plataformas custa um arquivo: o que muda
+# e como o resultado e desenhado, nunca o que ele afirma.
+#
+# ATENCAO — este arquivo ainda nao foi exercitado num pipeline real. Ele e a
+# traducao direta do workflow que roda no GitHub, e os pontos onde as duas
+# plataformas divergem estao marcados com `# DIVERGE`.
+
+trigger: none
+
+# DIVERGE: no GitHub, `on: pull_request` basta. No Azure DevOps a validacao de
+# pull request e configurada na **branch policy** da branch de destino, e nao
+# aqui. Este bloco cobre o caso de o pipeline ser chamado por PR de repositorio
+# do proprio Azure Repos.
+pr:
+  branches:
+    include: [main]
+  paths:
+    include:
+      - contracts/*
+      - azure-pipelines.yml
+
+pool:
+  vmImage: ubuntu-latest
+
+steps:
+  - checkout: self
+    # DIVERGE: necessario para o passo que commita o laudo de volta na branch.
+    persistCredentials: true
+
+  # --- 1. A ferramenta ---------------------------------------------------
+  #
+  # DIVERGE: `gh release download` nao existe aqui. `curl` resolve enquanto o
+  # repositorio do harness for publico; sendo privado, troque por uma chamada
+  # autenticada a API de releases, ou publique o pacote num feed de artefatos
+  # do proprio Azure DevOps.
+  - script: |
+      set -eu
+      . ./harness.lock
+      curl -fsSL -o "$(Agent.TempDirectory)/harness.tar.gz" \
+        "https://github.com/$HARNESS_REPO/releases/download/$HARNESS_VERSAO/harness-odcs-linux-x64.tar.gz"
+    displayName: baixar o pacote de validacao
+
+  - script: |
+      set -eu
+      . ./harness.lock
+      obtido="$(sha256sum "$(Agent.TempDirectory)/harness.tar.gz" | cut -d' ' -f1)"
+      if [ "$obtido" != "$HARNESS_SHA256" ]; then
+        echo "##vso[task.logissue type=error]o pacote baixado nao e o fixado em harness.lock"
+        echo "  esperado : $HARNESS_SHA256"
+        echo "  obtido   : $obtido"
+        exit 1
+      fi
+      echo "sha256 confere: $obtido"
+    displayName: conferir o sha256
+
+  - script: |
+      set -eu
+      tar -C "$(Agent.TempDirectory)" -xzf "$(Agent.TempDirectory)/harness.tar.gz"
+      cat "$(Agent.TempDirectory)/harness-odcs/VERSION"
+    displayName: extrair e mostrar a procedencia
+
+  # --- 2. O motor de validacao -------------------------------------------
+  - script: "$(Agent.TempDirectory)/harness-odcs/scripts/imagem.sh"
+    displayName: preparar o motor de validacao
+
+  # --- 3. A verificacao --------------------------------------------------
+  #
+  # DIVERGE: `--formato github` emite anotacoes que so o GitHub entende. Aqui
+  # vale `--formato texto` ate existir um `--formato azure` que emita
+  # `##vso[task.logissue ...]` — ver docs/distribuicao.md.
+  - script: |
+      set +e
+      "$(Agent.TempDirectory)/harness-odcs/harness.sh" check \
+        --formato texto --saida "$(Agent.TempDirectory)/report.json"
+      echo "##vso[task.setvariable variable=codigo]$?"
+    displayName: verificar contrato
+
+  # --- 4. Emitir o laudo -------------------------------------------------
+  #
+  # DIVERGE: a identidade que commita e a conta de build do projeto, e ela
+  # precisa de "Contribute" na branch. No GitHub isso e `contents: write`.
+  - script: |
+      set -eu
+      pendente=$(jq -r '[.defeitos[] | select(.etapa == "aplicacao")] | length' \
+        "$(Agent.TempDirectory)/report.json")
+      [ "$pendente" = "0" ] && { echo "laudo ja emitido"; exit 0; }
+
+      "$(Agent.TempDirectory)/harness-odcs/harness.sh" aplicar
+      git add contracts/
+      git diff --cached --quiet && exit 0
+
+      git config user.name  "contrato-bot"
+      git config user.email "contrato-bot@$(Build.Repository.Name)"
+      git commit -m "chore: laudo de classificacao emitido pela esteira"
+      git push origin "HEAD:$(System.PullRequest.SourceBranch)"
+
+      # O push nao dispara um pipeline novo em nenhuma das duas plataformas —
+      # entao a verificacao do que acabou de ser escrito acontece aqui mesmo.
+      "$(Agent.TempDirectory)/harness-odcs/harness.sh" check \
+        --formato texto --saida "$(Agent.TempDirectory)/report.json" || true
+    displayName: emitir o laudo
+    condition: succeeded()
+
+  # --- 5. O resultado ----------------------------------------------------
+  #
+  # DIVERGE: o comentario no pull request sai pela REST de *pull request
+  # threads*, e nao por um `gh pr comment`. O corpo e o mesmo `--formato
+  # markdown`.
+  - script: |
+      "$(Agent.TempDirectory)/harness-odcs/harness.sh" report \
+        "$(Agent.TempDirectory)/report.json" --formato markdown > "$(Agent.TempDirectory)/comentario.md"
+      echo "##vso[task.uploadsummary]$(Agent.TempDirectory)/comentario.md"
+    displayName: resumo
+    condition: always()
+
+  - publish: evidence
+    artifact: evidencia-$(Build.BuildId)
+    condition: always()
+    displayName: artefatos
+
+  # `5` — gate aberto — nao reprova: falta decisao humana, e quem segura o merge
+  # e a branch policy exigindo revisor obrigatorio por caminho.
+  - script: |
+      case "$(codigo)" in
+        0) echo "contrato aprovado na verificacao automatica" ;;
+        5) echo "##vso[task.logissue type=warning]aguardando decisao humana" ;;
+        *) echo "##vso[task.logissue type=error]verificacao reprovou (exit $(codigo))"; exit 1 ;;
+      esac
+    displayName: veredito

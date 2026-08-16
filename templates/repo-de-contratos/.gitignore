@@ -1,0 +1,16 @@
+# O pacote de validacao, baixado. Fixado em `harness.lock`, nunca commitado:
+# um binario no repositorio de contratos seria uma segunda fonte de verdade
+# sobre qual criterio julga, competindo com o pin.
+/.harness/
+/.harness-download/
+/.harness-tmp/
+
+# Saida das ferramentas e rastro de execucao. No pipeline sao **artefato** do
+# job, com retencao propria. Aqui sao lixo local: o que fica no repositorio e o
+# laudo, e ele mora ao lado do contrato que descreve.
+/evidence/
+/trace/
+
+# Criado pelo `doctor` e nao usado neste repositorio — o estado do fluxo e do
+# harness, e o harness nao mora aqui.
+/state/

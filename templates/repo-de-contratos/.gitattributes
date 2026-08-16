@@ -1,0 +1,11 @@
+# Shell script com CRLF nao executa: o `\r` entra no shebang e o interpretador
+# vira `/usr/bin/env sh\r`, que nao existe. Quebra em git bash no Windows e no
+# runner, e a mensagem de erro nao diz nada sobre fim de linha.
+*.sh text eol=lf
+
+# O contrato e lido por ferramenta em container Linux e tem o sha256 conferido
+# contra o que o laudo registra. Fim de linha diferente e conteudo diferente:
+# o mesmo arquivo passaria a ter dois hashes conforme quem fez o checkout.
+*.yaml text eol=lf
+*.yml  text eol=lf
+harness.lock text eol=lf
