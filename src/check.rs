@@ -219,6 +219,7 @@ pub fn aplicar(cfg: &Config, escolha: Option<&str>) -> Result<(Relatorio, Vec<St
 
     let mut escritos = Vec::new();
 
+    let mut mudou_o_contrato = false;
     if let Some(origem) = &r.propostas.contrato {
         let novo = fs::read_to_string(cfg.root.join(origem))
             .with_context(|| format!("lendo a proposta em {origem}"))?;
@@ -227,8 +228,25 @@ pub fn aplicar(cfg: &Config, escolha: Option<&str>) -> Result<(Relatorio, Vec<St
         if !igual {
             fs::write(&destino, &novo).with_context(|| format!("escrevendo {}", r.contrato))?;
             escritos.push(r.contrato.clone());
+            mudou_o_contrato = true;
         }
     }
+
+    // Escrever o contrato muda o que os anexos descrevem.
+    //
+    // O laudo se refere ao contrato **classificado** e ja nasce estavel; o
+    // `.proposta.json` registra o sha do contrato como ele estava ao ser
+    // verificado — antes do enriquecimento. Aplicar sem reverificar gravaria
+    // um anexo que o proximo `check` acusaria de divergente, e a correcao seria
+    // rodar `aplicar` de novo: uma cerimonia que a ferramenta pode poupar.
+    //
+    // O custo e uma segunda partida de container, e so quando o contrato
+    // mudou de fato — que e a primeira aplicacao, nao as seguintes.
+    let r = if mudou_o_contrato {
+        executar(cfg, escolha)?
+    } else {
+        r
+    };
 
     if let (Some(origem), Some(destino)) = (&r.propostas.laudo, &r.propostas.laudo_destino) {
         let corpo = fs::read_to_string(cfg.root.join(origem))
