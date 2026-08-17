@@ -1,10 +1,13 @@
 [package]
 name = "harness-odcs"
-version = "0.1.0"
+version = "0.5.1"
 edition = "2024"
 rust-version = "1.95"
 description = "Harness de desenvolvimento incremental para classificacao de privacidade de contratos ODCS"
 publish = false
+# Esta versao e a tag do release sao **a mesma coisa**, e o workflow de release
+# reprova quando divergem. Sem essa trava, `Cargo.toml` viraria um numero
+# decorativo — foi o que aconteceu: ficou em 0.1.0 durante cinco releases.
 
 # Split lib/bin proposital: sem a lib, `tests/` nao alcanca a maquina de
 # estados e o criterio "determinismo testavel" fica sem prova. A politica

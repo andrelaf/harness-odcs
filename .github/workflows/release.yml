@@ -27,6 +27,23 @@ jobs:
 
       - uses: Swatinem/rust-cache@v2
 
+      # A tag e a versao declarada tem de ser a mesma coisa.
+      #
+      # Sem esta trava o `Cargo.toml` vira numero decorativo — foi exatamente o
+      # que aconteceu: ficou em `0.1.0` enquanto cinco releases saiam. Ninguem
+      # notou porque nada dependia dele, e e assim que uma segunda fonte de
+      # verdade se instala: sem quebrar nada, ate o dia em que alguem acredita
+      # na errada.
+      - name: versao declarada bate com a tag
+        run: |
+          declarada="$(grep -m1 '^version' Cargo.toml | cut -d'"' -f2)"
+          if [ "v$declarada" != "$GITHUB_REF_NAME" ]; then
+            echo "::error::tag $GITHUB_REF_NAME e Cargo.toml $declarada divergem"
+            echo "  suba a versao em Cargo.toml antes de criar a tag"
+            exit 1
+          fi
+          echo "versao $declarada confere com a tag"
+
       # Um release que nao passa nos testes e um defeito distribuido por
       # versao fixada — pior que um defeito local, porque agora ele tem numero
       # e alguem vai fixa-lo de proposito.
