@@ -4,6 +4,10 @@
 > Descreve **o que desenhar**, não apenas o que o sistema faz. Os rótulos entre
 > aspas devem aparecer literalmente na arte.
 
+O resultado deste roteiro está em [`infografico-processo.png`](../infografico-processo.png),
+na raiz do repositório. A versão vetorial, usada na documentação, é
+[`fluxo.svg`](fluxo.svg).
+
 ---
 
 ## Instrução de uma linha

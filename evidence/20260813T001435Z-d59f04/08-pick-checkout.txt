@@ -1,5 +1,0 @@
-# comando: git checkout -b feat/f3-classificar
-# --- stdout ---
-
-# --- stderr ---
-Switched to a new branch 'feat/f3-classificar'

@@ -334,11 +334,9 @@ Scripts em `scripts/`, todos despachantes:
 |---|---|
 | `env.sh` | Fonte única: raiz do repo, sufixo `.exe`, caminho do binário, engine de container, tag fixada da imagem. Apenas *sourced*. |
 | `bootstrap.sh` | Idempotente: valida toolchain, cria `state/ trace/ evidence/`, faz `pull` da imagem fixada. |
-| `doctor.sh` | Wrapper de `run.sh doctor`. |
 | `datacontract.sh` | Wrapper do container com o mount padrão. |
 | `editor.sh` | Sobe o editor ODCS local. |
 | `dev.sh` | `fmt` + `clippy` + `test`. |
-| `ci.sh` | `bootstrap` → `dev` → `doctor`. O mesmo comando roda local e no CI. |
 
 As checagens de `doctor` e da fase `smoke` são **o mesmo código**, chamado de dois lugares. Duas listas de checagem divergem em duas semanas.
 

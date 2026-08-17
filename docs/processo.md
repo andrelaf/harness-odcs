@@ -31,6 +31,14 @@ no dia em que as duas cadências — código e vocabulário — começarem a doe
 
 ## O fluxo de trabalho
 
+![Da modelagem ao contrato classificado](fluxo.svg)
+
+As três faixas do desenho são as três autoridades deste processo: quem **modela**
+o dado, a **máquina** que julga sem opinar, e o **humano** que decide o que a
+máquina não tem autoridade para decidir. Nada atravessa a segunda faixa sem
+deixar rastro, e nada sai da terceira sem aprovação registrada.
+
+
 ```
 pessoa escreve YAML  ─→  PR para main  ─→  esteira verifica e emite o laudo
                                               │

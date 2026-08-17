@@ -1,4 +1,0 @@
-# comando: git rev-parse --verify --quiet feat/f2-mapear
-# --- stdout ---
-
-# --- stderr ---

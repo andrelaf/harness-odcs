@@ -1,5 +1,0 @@
-# comando: git log -1 --format=%h %s
-# --- stdout ---
-cf5abd8 feat: F1 real (lint ODCS), comando `reset` e layout de contracts/
-
-# --- stderr ---

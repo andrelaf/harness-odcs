@@ -369,10 +369,15 @@ O `report.json` do `check` tem `schema_version` próprio e é o ponto de integra
 
 ## Estrutura do repositório
 
+A leitura por audiência: **quem vai usar** o processo começa por
+[`docs/processo.md`](docs/processo.md); **quem vai montar** um repositório de
+contratos, por [`docs/bootstrap-repo-contratos.md`](docs/bootstrap-repo-contratos.md);
+**quem avalia o trabalho de curso**, por [`docs/curso.md`](docs/curso.md).
+
 ```
 run.sh                    ponto de entrada único
 .github/                  verificação em pull request — workflow, CODEOWNERS e o guia de setup
-scripts/                  despachantes de ambiente (bootstrap, doctor, editor, ci)
+scripts/                  ambiente, empacotamento e o gerador do repo de contratos
 src/                      o harness em Rust — fluxo, estado, trace, fases
 tests/                    tabela de transições: ordem, teto, halt
 contracts/<nome>/         um diretório por contrato — fonte, e destino do enriquecimento aprovado
@@ -381,7 +386,14 @@ classification/           o catálogo LGPD, chaveado por termo do glossário
 state/                    feature-list.json, progress.json, gate-pendente.json, aprovacoes.json
 trace/                    <run_id>.jsonl, append-only
 metrics/                  metrics.jsonl — derivado de trace/, regenerável
-evidence/                 saída bruta das ferramentas, por run
+evidence/                 saída bruta das ferramentas — runs representativos, não todos
 docs/                     brief, contexto, specs, processo, laudo, cobertura, decisão e demo
 templates/                o repositório de contratos inteiro, pronto para materializar
 ```
+
+`evidence/` guarda **runs representativos**, não os 39 que existiram: a evidência
+é regenerável a partir do contrato e do critério, e 445 arquivos de saída bruta
+afogavam os 19 do produto. O `trace/` ficou inteiro — é dele que a medição é
+derivada, e apagá-lo tornaria os números da [Medição](#medição) não verificáveis.
+
+O histórico do Git preserva o que foi podado.

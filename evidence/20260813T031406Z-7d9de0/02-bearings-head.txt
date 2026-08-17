@@ -1,5 +1,0 @@
-# comando: git log -1 --format=%h %s
-# --- stdout ---
-862d42d feat: F3 real (classificacao LGPD em campos ODCS) e classification/
-
-# --- stderr ---

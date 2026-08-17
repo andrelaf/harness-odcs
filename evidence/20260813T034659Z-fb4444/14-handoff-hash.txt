@@ -1,5 +1,0 @@
-# comando: git rev-parse --short HEAD
-# --- stdout ---
-759efd6
-
-# --- stderr ---

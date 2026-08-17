@@ -1,5 +1,0 @@
-# comando: git log -1 --format=%h %s
-# --- stdout ---
-6058011 feat: `--json` e handoff com verificacao e riscos
-
-# --- stderr ---

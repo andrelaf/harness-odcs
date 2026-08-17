@@ -1,4 +1,0 @@
-# comando: git add state trace evidence contracts
-# --- stdout ---
-
-# --- stderr ---

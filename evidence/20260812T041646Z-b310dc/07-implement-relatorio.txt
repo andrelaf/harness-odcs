@@ -1,5 +1,0 @@
-# comando: docker run --rm -v C:/repos/harness-odcs:/home/datacontract datacontract/cli:1.1.0 export html contracts/clientes/contract.odcs.yaml --output evidence/20260812T041646Z-b310dc/f1-relatorio.html
-# --- stdout ---
-Written result to evidence/20260812T041646Z-b310dc/f1-relatorio.html
-
-# --- stderr ---

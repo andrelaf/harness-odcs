@@ -162,8 +162,8 @@ ls scripts/                   # despachantes, zero lógica de fluxo
 Não há `.vscode/`, `tasks.json`, `run.ps1` nem alias documentado. **Um ponto de
 entrada, `./run.sh`**, e a política inteira compilada em Rust. Rodar do terminal
 integrado do VS Code ou do Claude Code produz a mesma saída e o mesmo exit code
-porque não há caminho alternativo para produzir outra. `scripts/ci.sh` é a mesma
-sequência que o CI executa.
+porque não há caminho alternativo para produzir outra. O workflow do CI chama
+`./run.sh` — o mesmo ponto de entrada, sem sequência própria.
 
 ---
 
