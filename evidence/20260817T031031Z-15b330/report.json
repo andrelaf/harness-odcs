@@ -1,0 +1,45 @@
+{
+  "schema_version": 2,
+  "run_id": "20260817T031031Z-15b330",
+  "contrato": "contracts/clientes/contract.odcs.yaml",
+  "contrato_sha256": "03d0120f9caa4a0302d8ff6d80d77a606e0e4bdaccb5d99c655f594c31d7d6b9",
+  "veredito": "bloqueado",
+  "exit_code": 5,
+  "glossario_versao": "1.0.0",
+  "catalogo_versao": "1.0.0",
+  "resumo": {
+    "campos": 9,
+    "classificados": 7,
+    "primeira_classificacao": 0,
+    "inalterados": 7,
+    "lacunas": 2,
+    "reclassificacoes": 0,
+    "conflitos": 0
+  },
+  "defeitos": [],
+  "avisos": [
+    "`contracts/clientes/contract.odcs.yaml` nao tem nivel de dominio. Funciona, mas `contracts/<dominio>/<contrato>/contract.odcs.yaml` e o que permite ao CODEOWNERS rotear a revisao por dono do dado"
+  ],
+  "gate_sha256": "4f773bab5f6e400f16bd5fdcabd11dab437c929f3d03f03736433be527779e78",
+  "gate": [
+    {
+      "tipo": "lacuna",
+      "campo": "segmento",
+      "detalhe": "campo sem termo no glossario — segue sem classificacao no contrato ate decisao humana"
+    },
+    {
+      "tipo": "lacuna",
+      "campo": "valor_total_compras",
+      "detalhe": "campo sem termo no glossario — segue sem classificacao no contrato ate decisao humana"
+    }
+  ],
+  "propostas": {
+    "contrato": "evidence/20260817T031031Z-15b330/f4-contrato-enriquecido.odcs.yaml",
+    "laudo": "evidence/20260817T031031Z-15b330/laudo.md",
+    "laudo_destino": "contracts/clientes/laudos/1.0.0-03d0120-4fc5b5f.md",
+    "anexo_proposta": "evidence/20260817T031031Z-15b330/laudo.proposta.json",
+    "anexo_proposta_destino": "contracts/clientes/laudos/1.0.0-03d0120-4fc5b5f.proposta.json",
+    "anexo_html": "evidence/20260817T031031Z-15b330/laudo.html",
+    "anexo_html_destino": "contracts/clientes/laudos/1.0.0-03d0120-4fc5b5f.html"
+  }
+}

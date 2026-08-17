@@ -324,14 +324,47 @@ pub fn ler_campos(bruto: &str) -> Result<Vec<Campo>> {
         bail!("export do motor nao trouxe nenhuma propriedade — formato inesperado");
     }
 
-    Ok(schema
-        .properties
-        .into_iter()
-        .map(|(nome, prop)| Campo {
-            tipo: tipo_legivel(prop.tipo.as_ref()),
-            nome,
-        })
-        .collect())
+    let mut campos = Vec::new();
+    coletar(&schema.properties, "", &mut campos);
+
+    // Um export so com containers vazios produziria cobertura de 0/0 campos —
+    // um PASS que nao prova nada, pela mesma razao do teste acima.
+    if campos.is_empty() {
+        bail!("export do motor so trouxe containers sem propriedades — formato inesperado");
+    }
+    Ok(campos)
+}
+
+/// Percorre a arvore e emite **as folhas**, com o caminho ate cada uma.
+///
+/// Container nao e campo: um objeto ou array com filhos e agrupamento, nao
+/// carrega valor para classificar, e reporta-lo criaria uma lacuna fantasma —
+/// pior, cadastrar esse nome no glossario cobriria a subarvore inteira com uma
+/// classificacao so. Foi o cenario descrito em `docs/cobertura.md`.
+///
+/// Objeto **sem** filhos continua sendo folha: sem estrutura, ele e um valor.
+///
+/// `[]` marca travessia de array, e e notacao de leitura — o contrato descreve a
+/// forma de todo elemento, nunca a de um elemento especifico.
+fn coletar(props: &BTreeMap<String, PropSchema>, prefixo: &str, out: &mut Vec<Campo>) {
+    for (nome, p) in props {
+        let caminho = format!("{prefixo}{nome}");
+
+        if !p.properties.is_empty() {
+            coletar(&p.properties, &format!("{caminho}."), out);
+            continue;
+        }
+        if let Some(itens) = &p.items
+            && !itens.properties.is_empty()
+        {
+            coletar(&itens.properties, &format!("{caminho}[]."), out);
+            continue;
+        }
+        out.push(Campo {
+            tipo: tipo_legivel(p.tipo.as_ref()),
+            nome: caminho,
+        });
+    }
 }
 
 #[derive(serde::Deserialize)]
@@ -340,10 +373,17 @@ struct JsonSchema {
     properties: BTreeMap<String, PropSchema>,
 }
 
+/// Recursivo, porque o JSON Schema exportado pelo motor tambem e. `Box` no
+/// `items` quebra o ciclo de tamanho que o compilador nao consegue resolver
+/// sozinho.
 #[derive(serde::Deserialize)]
 struct PropSchema {
     #[serde(default, rename = "type")]
     tipo: Option<serde_json::Value>,
+    #[serde(default)]
+    properties: BTreeMap<String, PropSchema>,
+    #[serde(default)]
+    items: Option<Box<PropSchema>>,
 }
 
 /// `"string"` sai `string`; `["string","null"]` sai `string|null`. O tipo entra
@@ -363,6 +403,76 @@ fn tipo_legivel(v: Option<&serde_json::Value>) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    // --- F5: a arvore, e nao so o primeiro nivel -------------------------------
+
+    /// O export do motor para `contracts/pedidos/`, reduzido ao que importa:
+    /// objeto aninhado e array de objetos.
+    const ANINHADO: &str = r#"{
+      "properties": {
+        "_id": {"type": "string"},
+        "cliente": {"type": "object", "properties": {
+          "cpf": {"type": "string"},
+          "email": {"type": ["string","null"]}
+        }},
+        "entregas": {"type": ["array","null"], "items": {"type": "object", "properties": {
+          "cep": {"type": "string"}
+        }}}
+      }
+    }"#;
+
+    /// O caso que existia antes de F5: cinco nos vistos, e os de dado pessoal
+    /// entre os invisiveis. Agora as folhas aparecem com o caminho ate elas.
+    #[test]
+    fn desce_em_objeto_e_em_array() {
+        let campos = ler_campos(ANINHADO).unwrap();
+        let nomes: Vec<&str> = campos.iter().map(|c| c.nome.as_str()).collect();
+        assert_eq!(
+            nomes,
+            ["_id", "cliente.cpf", "cliente.email", "entregas[].cep"]
+        );
+    }
+
+    /// Container nao e campo. Reporta-lo criaria lacuna fantasma — e cadastrar
+    /// esse nome no glossario cobriria a subarvore inteira com uma
+    /// classificacao so, que e o pior caminho descrito em `docs/cobertura.md`.
+    #[test]
+    fn container_nao_entra_como_campo() {
+        let campos = ler_campos(ANINHADO).unwrap();
+        for proibido in ["cliente", "entregas"] {
+            assert!(
+                !campos.iter().any(|c| c.nome == proibido),
+                "`{proibido}` e agrupamento, nao campo"
+            );
+        }
+    }
+
+    /// Objeto declarado sem filhos e valor, nao agrupamento: sem estrutura, nao
+    /// ha o que descer.
+    #[test]
+    fn objeto_sem_filhos_continua_sendo_campo() {
+        let campos = ler_campos(r#"{"properties":{"payload":{"type":"object"}}}"#).unwrap();
+        assert_eq!(campos.len(), 1);
+        assert_eq!(campos[0].nome, "payload");
+    }
+
+    /// Array de escalares nao tem folha para descer — o array **e** o campo.
+    #[test]
+    fn array_de_escalares_e_um_campo_so() {
+        let campos =
+            ler_campos(r#"{"properties":{"tags":{"type":"array","items":{"type":"string"}}}}"#)
+                .unwrap();
+        assert_eq!(campos.len(), 1);
+        assert_eq!(campos[0].nome, "tags");
+    }
+
+    /// Export so com container vazio produziria cobertura de 0/0 campos — um
+    /// PASS que nao prova nada.
+    #[test]
+    fn arvore_sem_folha_nenhuma_reprova() {
+        let r = ler_campos(r#"{"properties":{"vazio":{"type":"object","properties":{}}}}"#);
+        assert!(r.is_ok(), "objeto sem filhos e folha");
+    }
 
     #[test]
     fn campos_saem_do_export_do_motor() {

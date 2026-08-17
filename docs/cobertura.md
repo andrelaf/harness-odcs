@@ -3,8 +3,13 @@
 Um experimento com um contrato de coleção MongoDB, feito para responder uma
 pergunta de governança: **este processo cobre o que promete?**
 
-A resposta curta é **não, ainda não** — e o modo como ele falha importa mais que
-o fato de falhar.
+A resposta era **não**. Desde a F5 é **sim**, e este documento guarda os dois
+estados: o que falhava, por quê, e o que a correção mudou. A falha vale mais
+registrada que apagada — ela explica por que o desenho é como é.
+
+> **Resolvido em F5** — [`spec-f5-aninhado.md`](spec-f5-aninhado.md). A extração
+> passou a percorrer a árvore, e `contracts/pedidos/` saiu de 5 nós vistos para
+> **8 campos**, com `cliente.cpf` classificado como `restricted`.
 
 ---
 
@@ -31,13 +36,14 @@ properties:
         - name: data_nascimento_recebedor
 ```
 
-Dez campos reais. **Cinco deles são dado pessoal**: CPF, nome completo, e-mail,
-CEP e data de nascimento.
+Oito campos de dado — mais dois containers, `cliente` e `entregas`, que agrupam
+sem carregar valor. **Cinco dos oito são dado pessoal**: CPF, nome completo,
+e-mail, CEP e data de nascimento.
 
 O contrato está em [`contracts/pedidos/`](../contracts/pedidos/), preservado como
 evidência do experimento.
 
-## O resultado
+## O resultado — antes da F5
 
 ```
 $ ./run.sh check --contrato contracts/pedidos/contract.odcs.yaml
@@ -132,20 +138,40 @@ Não é hipotético: é o caminho de menor esforço para quem quer fechar a lacu
 rápido. A ferramenta que existe para impedir classificação displicente teria
 produzido a prova documental dela.
 
-### O veredito
+### O veredito daquele momento
 
-Para contratos **planos** — tabelas relacionais, CSV, Parquet com schema raso —
-a cobertura é real e o processo entrega o que promete.
+Para contratos **planos**, a cobertura era real. Para contratos com **estrutura
+aninhada**, era parcial e enganosa — e a recomendação registrada foi não usar o
+processo como prova de conformidade sobre eles enquanto a extração não descesse
+na árvore.
 
-Para contratos com **estrutura aninhada** — MongoDB, JSON de API, Avro com
-records — a cobertura é **parcial e enganosa**. Não use este processo como prova
-de conformidade sobre eles até a extração ser recursiva.
+É essa recomendação que a F5 revoga.
 
 ---
 
-## O que a correção exige
+## O resultado — depois da F5
 
-Não é grande, mas toca três lugares:
+```
+$ ./run.sh check --contrato contracts/pedidos/contract.odcs.yaml
+veredito   BLOQUEADO
+campos     8 — 4 classificado(s), 4 lacuna(s), 0 conflito(s)
+  gate     [lacuna] _id · data_pedido · valor_total
+           [lacuna] entregas[].data_nascimento_recebedor
+```
+
+Os campos aparecem com o caminho até eles, e o `classification` é escrito **na
+folha** — `cliente` continua sem classificação nenhuma, que é o correto: ele é
+agrupamento, não dado.
+
+A quinta lacuna, `entregas[].data_nascimento_recebedor`, **não** é falha da
+ferramenta: o glossário cobre `data_nascimento` da pessoa titular, e a data de
+nascimento de quem recebeu a entrega é outro dado, que ninguém cadastrou. O
+harness diz que não sabe — comportamento certo. Fechá-la é decisão de quem
+responde pelo vocabulário.
+
+## O que a correção exigiu
+
+Não foi grande, mas tocou três lugares:
 
 **1. Extração recursiva** (`contrato.rs`). Descer em `properties` de objetos e em
 `items.properties` de arrays, produzindo caminhos pontilhados: `cliente.cpf`,
@@ -160,12 +186,18 @@ em ramos diferentes viram um só.
 propriedade certa, dentro da árvore. É a parte mais cara: hoje a reescrita opera
 sobre a lista plana de propriedades de topo.
 
-Estimativa honesta: o item 1 é uma tarde; os itens 2 e 3, juntos, são o mesmo
-tamanho de uma das features originais (F2 ou F3) — dias, não horas. E `decisao.md`
-já avisava que **escrever ODCS de volta é a parte cara**.
+A estimativa era "uma tarde para o item 1, dias para os outros dois". Saiu mais
+barato que isso, e o motivo é instrutivo: as três funções já eram puras e
+testadas, então a mudança foi **trocar iteração por recursão** em três lugares
+bem delimitados, sem tocar em regra de classificação nenhuma.
 
-Enquanto não for feito, a mitigação que funciona é de processo, não de código:
-**tratar contrato com objeto aninhado como fora do escopo automatizado**, e
-revisar na mão. O harness não sabe dizer o que não viu — e um contrato que ele
-não cobre inteiro não deveria receber laudo, porque o laudo passa a valer como
-prova de algo que ninguém verificou.
+O que protegeu contra o risco silencioso — escrever no nó errado — foi a
+assertiva estar no `verify` da feature, e não num teste opcional: um campo cujo
+nome seja prefixo de outro reprova o run, porque isso significaria container
+reportado como folha.
+
+### O que continua fora
+
+`$ref` e composição (`allOf`, `oneOf`) não são percorridos. O motor não os produz
+para os contratos que este projeto exercita; aparecendo, o nó vira lacuna — que é
+o comportamento certo para o que não se entende.

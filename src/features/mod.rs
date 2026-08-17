@@ -20,6 +20,7 @@ pub mod f1_validar;
 pub mod f2_mapear;
 pub mod f3_classificar;
 pub mod f4_gate;
+pub mod f5_aninhado;
 
 use crate::flow::{Outcome, Phase};
 use crate::phases::Run;
@@ -36,6 +37,8 @@ pub fn dispatch(run: &mut Run, phase: Phase) -> Option<Outcome> {
         ("f3-classificar", Phase::Verify) => Some(f3_classificar::verify(run)),
         ("f4-gate", Phase::Implement) => Some(f4_gate::implement(run)),
         ("f4-gate", Phase::Verify) => Some(f4_gate::verify(run)),
+        ("f5-aninhado", Phase::Implement) => Some(f5_aninhado::implement(run)),
+        ("f5-aninhado", Phase::Verify) => Some(f5_aninhado::verify(run)),
         _ => None,
     }
 }

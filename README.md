@@ -322,6 +322,7 @@ Semana 4 de 4. As quatro features rodam de ponta a ponta, a medição é derivad
 | F2 · Mapear — [spec](docs/spec-f2-mapear.md) | pronta · glossário canônico, cobertura de decisão |
 | F3 · Classificar — [spec](docs/spec-f3-classificar.md) | pronta · catálogo LGPD em campos ODCS |
 | F4 · Gate + relatório — [spec](docs/spec-f4-gate.md) | pronta · contrato enriquecido, lacunas e pausa humana |
+| F5 · Cobertura aninhada — [spec](docs/spec-f5-aninhado.md) | pronta · objeto e array percorridos, `classification` na folha |
 | Medição (custo, duração, erros) | pronta · `./run.sh metrics`, derivada do trace |
 | Verificação em pull request — [`.github/`](.github/README.md) | pronta · `./run.sh check`, workflow e CODEOWNERS |
 | [`docs/git-flow.md`](docs/git-flow.md) — branch, PR e merge | pronto · convenção verificada no CI |
@@ -330,7 +331,7 @@ Semana 4 de 4. As quatro features rodam de ponta a ponta, a medição é derivad
 | [`docs/processo.md`](docs/processo.md) — o fluxo de produção, ponta a ponta | pronto |
 | [`docs/artefatos.md`](docs/artefatos.md) — pacote, container e tudo que é gerado | pronto |
 | [`docs/laudo.md`](docs/laudo.md) — como o laudo nasce e o que o sustenta | pronto |
-| [`docs/cobertura.md`](docs/cobertura.md) — **o limite: contrato aninhado não é coberto** | medido |
+| [`docs/cobertura.md`](docs/cobertura.md) — o limite aninhado: medido, e resolvido em F5 | fechado |
 | [`docs/portabilidade.md`](docs/portabilidade.md) — a prova, e o que ela custou | pronto |
 | [`docs/bootstrap-repo-contratos.md`](docs/bootstrap-repo-contratos.md) — criar o repo de contratos do zero | pronto |
 | [`BACKLOG-FUTURO.md`](BACKLOG-FUTURO.md) — o que ficou de fora, e por quê | pronto |

@@ -351,6 +351,22 @@ fn indice(g: &Glossario) -> BTreeMap<String, &Termo> {
 /// casar com `código_postal` seria adivinhar uma grafia que ninguem declarou.
 /// Variacao de escrita se resolve acrescentando o alias — decisao declarada,
 /// nao inferida.
+/// O ultimo segmento de um caminho: `cliente.cpf` -> `cpf`,
+/// `entregas[].cep` -> `cep`, `cpf` -> `cpf`.
+///
+/// O `[]` sai junto porque ele marca travessia de array, e nao faz parte do
+/// nome do campo. Sem isso, `entregas[]` de um array de escalares nunca casaria
+/// com termo nenhum.
+pub fn folha(caminho: &str) -> &str {
+    caminho
+        .rsplit('.')
+        .next()
+        .unwrap_or(caminho)
+        .trim_end_matches("[]")
+}
+
+/// Minusculas, e tudo que nao for letra ou digito vira `_`, com repeticoes
+/// colapsadas e bordas aparadas.
 pub fn normalizar(s: &str) -> String {
     let mut out = String::with_capacity(s.len());
     for c in s.chars().flat_map(char::to_lowercase) {
@@ -425,8 +441,16 @@ pub fn mapear(
     let decididos: Vec<Decidido> = campos
         .iter()
         .map(|c| {
+            // Caminho inteiro primeiro, folha depois. O primeiro permite ao
+            // glossario desambiguar quando o mesmo nome significa coisas
+            // diferentes em ramos diferentes; o segundo e o que faz
+            // `cliente.cpf` casar com `pessoa.cpf` sem ninguem cadastrar
+            // caminho nenhum.
             let chave = normalizar(&c.nome);
-            match idx.get(&chave) {
+            let achado = idx
+                .get(&chave)
+                .or_else(|| idx.get(&normalizar(folha(&c.nome))));
+            match achado {
                 Some(t) => Decidido {
                     campo: c.nome.clone(),
                     tipo: c.tipo.clone(),

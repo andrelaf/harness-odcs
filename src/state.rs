@@ -67,6 +67,7 @@ impl FeatureList {
                 f("f2-mapear", 2, "Mapear campos ao glossario canonico"),
                 f("f3-classificar", 3, "Classificar PII/LGPD por campo"),
                 f("f4-gate", 4, "Gate humano + relatorio de lacunas"),
+                f("f5-aninhado", 5, "Cobertura de estrutura aninhada"),
             ],
         }
     }

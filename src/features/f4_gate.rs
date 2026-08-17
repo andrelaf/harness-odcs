@@ -830,10 +830,39 @@ pub fn declaracao_do_yaml(bruto: &str) -> Result<BTreeMap<String, Marcacao>> {
         let Some(props) = objeto.get("properties").and_then(Value::as_sequence) else {
             continue;
         };
-        for prop in props {
-            let Some(nome) = prop.get("name").and_then(Value::as_str) else {
-                continue;
-            };
+        percorrer_declaracoes(props, "", &mut out);
+    }
+    Ok(out)
+}
+
+/// Desce a arvore de `properties` do ODCS colhendo o que **o contrato ja
+/// declara**, com o caminho ate cada folha.
+///
+/// Espelha `contrato::coletar`, que percorre o JSON Schema: as duas arvores
+/// descrevem o mesmo contrato, e um caminho produzido por uma tem de existir na
+/// outra — senao o confronto compara campos que nao se correspondem.
+fn percorrer_declaracoes(props: &[Value], prefixo: &str, out: &mut BTreeMap<String, Marcacao>) {
+    for prop in props {
+        let Some(nome) = prop.get("name").and_then(Value::as_str) else {
+            continue;
+        };
+        let caminho = format!("{prefixo}{nome}");
+
+        if let Some(filhos) = prop.get("properties").and_then(Value::as_sequence) {
+            percorrer_declaracoes(filhos, &format!("{caminho}."), out);
+            continue;
+        }
+        if let Some(filhos) = prop
+            .get("items")
+            .and_then(|i| i.get("properties"))
+            .and_then(Value::as_sequence)
+        {
+            percorrer_declaracoes(filhos, &format!("{caminho}[]."), out);
+            continue;
+        }
+
+        {
+            let nome = caminho.as_str();
             let classification = prop
                 .get("classification")
                 .and_then(Value::as_str)
@@ -852,7 +881,6 @@ pub fn declaracao_do_yaml(bruto: &str) -> Result<BTreeMap<String, Marcacao>> {
             );
         }
     }
-    Ok(out)
 }
 
 fn tags_de(prop: &Value) -> Vec<String> {
@@ -1061,17 +1089,7 @@ pub fn aplicar(bruto: &str, campos: &[CampoClassificado]) -> Result<(String, Vec
             else {
                 continue;
             };
-            for prop in props.iter_mut() {
-                let Some(nome) = prop.get("name").and_then(Value::as_str).map(str::to_string)
-                else {
-                    continue;
-                };
-                let Some(c) = por_nome.get(nome.as_str()) else {
-                    continue;
-                };
-                marcar(prop, c);
-                aplicados.insert(nome);
-            }
+            marcar_arvore(props, "", &por_nome, &mut aplicados);
         }
     }
 
@@ -1083,6 +1101,60 @@ pub fn aplicar(bruto: &str, campos: &[CampoClassificado]) -> Result<(String, Vec
         .collect();
 
     Ok((yaml, nao_aplicados))
+}
+
+/// Desce a arvore escrevendo `classification` **na folha**, nunca no container.
+///
+/// E o ponto onde esta feature pode falhar em silencio: um `classification` no
+/// objeto `cliente` em vez de em `cliente.cpf` passa no lint, produz laudo e
+/// afirma o que ninguem verificou. Por isso o container e atravessado sem nunca
+/// ser marcado — `continue` antes de `marcar`, e nao depois.
+fn marcar_arvore(
+    props: &mut [Value],
+    prefixo: &str,
+    por_nome: &BTreeMap<&str, &CampoClassificado>,
+    aplicados: &mut BTreeSet<String>,
+) {
+    for prop in props.iter_mut() {
+        let Some(nome) = prop.get("name").and_then(Value::as_str).map(str::to_string) else {
+            continue;
+        };
+        let caminho = format!("{prefixo}{nome}");
+
+        if prop
+            .get("properties")
+            .and_then(Value::as_sequence)
+            .is_some()
+        {
+            let filho = format!("{caminho}.");
+            if let Some(filhos) = prop.get_mut("properties").and_then(Value::as_sequence_mut) {
+                marcar_arvore(filhos, &filho, por_nome, aplicados);
+            }
+            continue;
+        }
+        if prop
+            .get("items")
+            .and_then(|i| i.get("properties"))
+            .and_then(Value::as_sequence)
+            .is_some()
+        {
+            let filho = format!("{caminho}[].");
+            if let Some(filhos) = prop
+                .get_mut("items")
+                .and_then(|i| i.get_mut("properties"))
+                .and_then(Value::as_sequence_mut)
+            {
+                marcar_arvore(filhos, &filho, por_nome, aplicados);
+            }
+            continue;
+        }
+
+        let Some(c) = por_nome.get(caminho.as_str()) else {
+            continue;
+        };
+        marcar(prop, c);
+        aplicados.insert(caminho);
+    }
 }
 
 /// Escreve os tres campos ODCS numa propriedade. Tudo deterministico: a

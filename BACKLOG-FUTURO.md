@@ -10,12 +10,7 @@ Ordenado por consequência, não por esforço.
 
 ## Corrige um limite conhecido
 
-**Extração recursiva de propriedades aninhadas.** O harness enxerga só o primeiro
-nível do contrato. Num documento MongoDB com o cliente embutido, CPF, nome e
-e-mail ficam invisíveis, e o laudo não menciona que existem — pior, adicionar o
-container ao glossário cobriria o CPF com uma classificação errada. Medido e
-descrito em [`docs/cobertura.md`](docs/cobertura.md). **É o item mais importante
-desta lista.**
+> A extração recursiva saiu daqui — virou F5, e está em `docs/spec-f5-aninhado.md`.
 
 **Retenção de `evidence/`.** Cresce sem política. Dezenas de arquivos por dezenas
 de execuções, e nada expira. Precisa de limpeza antes de virar problema — já

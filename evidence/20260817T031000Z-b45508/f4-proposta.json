@@ -1,0 +1,176 @@
+{
+  "contrato": "contracts/pedidos/contract.odcs.yaml",
+  "contrato_sha256": "1b5c94aa1284befbce79b184f4e16c82e18e1291c409942acbe76291447f3a67",
+  "glossario_versao": "1.0.0",
+  "catalogo_versao": "1.0.0",
+  "resumo": {
+    "campos": 8,
+    "classificados": 4,
+    "primeira_classificacao": 4,
+    "inalterados": 0,
+    "lacunas": 4,
+    "reclassificacoes": 0,
+    "conflitos": 0
+  },
+  "gate_sha256": "a6a710bfc83499b615a5dcc36f84d43cf1387073d92001f66b0c44909b9d0d64",
+  "gate": [
+    {
+      "tipo": "lacuna",
+      "campo": "_id",
+      "detalhe": "campo sem termo no glossario — segue sem classificacao no contrato ate decisao humana"
+    },
+    {
+      "tipo": "lacuna",
+      "campo": "data_pedido",
+      "detalhe": "campo sem termo no glossario — segue sem classificacao no contrato ate decisao humana"
+    },
+    {
+      "tipo": "lacuna",
+      "campo": "entregas[].data_nascimento_recebedor",
+      "detalhe": "campo sem termo no glossario — segue sem classificacao no contrato ate decisao humana"
+    },
+    {
+      "tipo": "lacuna",
+      "campo": "valor_total",
+      "detalhe": "campo sem termo no glossario — segue sem classificacao no contrato ate decisao humana"
+    }
+  ],
+  "campos": [
+    {
+      "campo": "_id",
+      "termo": null,
+      "mudanca": "lacuna",
+      "proposto": {
+        "classification": null,
+        "pii": null,
+        "sensivel": null
+      },
+      "declarado": {
+        "classification": null,
+        "pii": null,
+        "sensivel": null
+      },
+      "justificativa": "campo sem termo no glossario (lacuna de F2) — classificar exige decisao humana",
+      "referencia": null
+    },
+    {
+      "campo": "cliente.cpf",
+      "termo": "pessoa.cpf",
+      "mudanca": "primeira_classificacao",
+      "proposto": {
+        "classification": "restricted",
+        "pii": true,
+        "sensivel": false
+      },
+      "declarado": {
+        "classification": null,
+        "pii": null,
+        "sensivel": null
+      },
+      "justificativa": "Identificador univoco de pessoa natural emitido pela Receita Federal. Identifica sozinho e serve de chave de cruzamento com praticamente qualquer outra base do pais.",
+      "referencia": "LGPD art. 5, I"
+    },
+    {
+      "campo": "cliente.email",
+      "termo": "contato.email",
+      "mudanca": "primeira_classificacao",
+      "proposto": {
+        "classification": "confidential",
+        "pii": true,
+        "sensivel": false
+      },
+      "declarado": {
+        "classification": null,
+        "pii": null,
+        "sensivel": null
+      },
+      "justificativa": "Endereco de contato individual. Na pratica funciona como identificador de conta e alcanca a pessoa diretamente.",
+      "referencia": "LGPD art. 5, I"
+    },
+    {
+      "campo": "cliente.nome_completo",
+      "termo": "pessoa.nome_completo",
+      "mudanca": "primeira_classificacao",
+      "proposto": {
+        "classification": "confidential",
+        "pii": true,
+        "sensivel": false
+      },
+      "declarado": {
+        "classification": null,
+        "pii": null,
+        "sensivel": null
+      },
+      "justificativa": "Nome civil identifica a pessoa natural sem necessidade de cruzamento com outra base.",
+      "referencia": "LGPD art. 5, I"
+    },
+    {
+      "campo": "data_pedido",
+      "termo": null,
+      "mudanca": "lacuna",
+      "proposto": {
+        "classification": null,
+        "pii": null,
+        "sensivel": null
+      },
+      "declarado": {
+        "classification": null,
+        "pii": null,
+        "sensivel": null
+      },
+      "justificativa": "campo sem termo no glossario (lacuna de F2) — classificar exige decisao humana",
+      "referencia": null
+    },
+    {
+      "campo": "entregas[].cep",
+      "termo": "endereco.cep",
+      "mudanca": "primeira_classificacao",
+      "proposto": {
+        "classification": "confidential",
+        "pii": true,
+        "sensivel": false
+      },
+      "declarado": {
+        "classification": null,
+        "pii": null,
+        "sensivel": null
+      },
+      "justificativa": "CEP de residencia nao identifica sozinho, mas no Brasil chega ao nivel de logradouro e reidentifica quando combinado com data de nascimento.",
+      "referencia": "LGPD art. 5, I"
+    },
+    {
+      "campo": "entregas[].data_nascimento_recebedor",
+      "termo": null,
+      "mudanca": "lacuna",
+      "proposto": {
+        "classification": null,
+        "pii": null,
+        "sensivel": null
+      },
+      "declarado": {
+        "classification": null,
+        "pii": null,
+        "sensivel": null
+      },
+      "justificativa": "campo sem termo no glossario (lacuna de F2) — classificar exige decisao humana",
+      "referencia": null
+    },
+    {
+      "campo": "valor_total",
+      "termo": null,
+      "mudanca": "lacuna",
+      "proposto": {
+        "classification": null,
+        "pii": null,
+        "sensivel": null
+      },
+      "declarado": {
+        "classification": null,
+        "pii": null,
+        "sensivel": null
+      },
+      "justificativa": "campo sem termo no glossario (lacuna de F2) — classificar exige decisao humana",
+      "referencia": null
+    }
+  ]
+}
