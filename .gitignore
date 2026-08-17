@@ -1,5 +1,11 @@
 /target
 
+# Saida do `package.sh` sem argumento. O pacote e **publicado**, nunca
+# commitado: o que fica versionado e o codigo que o gera e a tag que o nomeia.
+# Um binario aqui seria uma segunda fonte de verdade competindo com o release,
+# e um `git add -A` distraido bastaria para cria-la.
+/dist/
+
 # Temporarios da escrita atomica de estado (tmp + rename).
 *.tmp
 
