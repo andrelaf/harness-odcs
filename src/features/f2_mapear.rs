@@ -311,10 +311,18 @@ pub fn defeitos_do_glossario(g: &Glossario) -> Vec<String> {
         }
         for chave in chaves {
             let donos = dono.entry(chave).or_default();
-            // Repetir a mesma chave dentro do proprio termo tambem conta: o
-            // alias duplicado nao muda o casamento, mas denuncia edicao
-            // descuidada do arquivo.
-            donos.push(id.to_string());
+            // **Termos distintos**, e nao ocorrencias. Dois aliases do mesmo
+            // termo que caem na mesma chave sao redundancia — `e-mail` e `email`
+            // dizem a mesma coisa e apontam para o mesmo lugar. Ambiguidade e
+            // quando dois termos **diferentes** disputam a chave, e ai o harness
+            // nao tem como escolher.
+            //
+            // Contar ocorrencias transformava a normalizacao canonica em erro:
+            // quanto melhor ela ficasse, mais aliases colapsariam, e mais o
+            // proprio glossario reprovaria.
+            if !donos.iter().any(|d| d == id) {
+                donos.push(id.to_string());
+            }
         }
     }
 
@@ -343,14 +351,6 @@ fn indice(g: &Glossario) -> BTreeMap<String, &Termo> {
     m
 }
 
-/// Minusculas, e tudo que nao for letra ou digito vira `_`, com repeticoes
-/// colapsadas e bordas aparadas.
-///
-/// Acento **nao** e normalizado, de proposito: casar `codigo_postal` com
-/// `codigo postal` e reconhecer o mesmo separador escrito de outro jeito;
-/// casar com `código_postal` seria adivinhar uma grafia que ninguem declarou.
-/// Variacao de escrita se resolve acrescentando o alias — decisao declarada,
-/// nao inferida.
 /// O ultimo segmento de um caminho: `cliente.cpf` -> `cpf`,
 /// `entregas[].cep` -> `cep`, `cpf` -> `cpf`.
 ///
@@ -365,18 +365,52 @@ pub fn folha(caminho: &str) -> &str {
         .trim_end_matches("[]")
 }
 
-/// Minusculas, e tudo que nao for letra ou digito vira `_`, com repeticoes
-/// colapsadas e bordas aparadas.
+/// A chave canonica de um nome: so letras e digitos, minusculos, sem acento.
+///
+/// `data_nascimento`, `dataNascimento`, `data-nascimento`, `datanascimento` e
+/// `DATA NASCIMENTO` produzem a mesma chave. Separador, caixa e acento sao
+/// **convencao de escrita** de quem modelou — o dado por baixo e o mesmo, e
+/// exigir que o glossario declare um alias por convencao seria transferir para
+/// o vocabulario um trabalho que uma funcao de dez linhas resolve.
+///
+/// **O que a normalizacao nao faz, e nao deve fazer:** casar nomes que apenas se
+/// parecem. `data_nascimento_recebedor` nao vira `data_nascimento`, `emails` nao
+/// vira `email`, `dt_nasc` nao vira nada. Sao significados diferentes ou
+/// abreviacoes, e resolve-los por aproximacao produziria um laudo com
+/// justificativa e base legal que nao se aplicam ao campo. Isso se declara: o
+/// glossario tem `aliases` justamente para isso.
+///
+/// A regra que separa os dois casos: **variacao de grafia se normaliza,
+/// significado diferente se declara.**
+///
+/// Fundir separadores aumenta a chance de dois termos colidirem numa chave so —
+/// e por isso e seguro: `defeitos_do_glossario` **reprova** colisao de alias
+/// entre termos. Uma colisao vira FAIL alto em vez de casamento silencioso com o
+/// termo errado.
 pub fn normalizar(s: &str) -> String {
-    let mut out = String::with_capacity(s.len());
-    for c in s.chars().flat_map(char::to_lowercase) {
-        if c.is_alphanumeric() {
-            out.push(c);
-        } else if !out.ends_with('_') {
-            out.push('_');
-        }
+    s.chars()
+        .flat_map(char::to_lowercase)
+        .filter(|c| c.is_alphanumeric())
+        .map(sem_acento)
+        .collect()
+}
+
+/// Dobra os diacriticos do portugues para a letra base.
+///
+/// Sem tabela externa nem dependencia: sao poucas letras, e escrever a lista
+/// deixa visivel exatamente o que e dobrado. `endereço` e `endereco` sao a mesma
+/// palavra, e o contrato que usa uma nao deveria virar lacuna por isso.
+fn sem_acento(c: char) -> char {
+    match c {
+        'á' | 'à' | 'â' | 'ã' | 'ä' => 'a',
+        'é' | 'è' | 'ê' | 'ë' => 'e',
+        'í' | 'ì' | 'î' | 'ï' => 'i',
+        'ó' | 'ò' | 'ô' | 'õ' | 'ö' => 'o',
+        'ú' | 'ù' | 'û' | 'ü' => 'u',
+        'ç' => 'c',
+        'ñ' => 'n',
+        outro => outro,
     }
-    out.trim_matches('_').to_string()
 }
 
 // --- Mapeamento ----------------------------------------------------------------
@@ -644,6 +678,60 @@ fn markdown(m: &Mapeamento) -> String {
 mod tests {
     use super::*;
 
+    /// camelCase e variacao de **escrita**, nao de significado: quem modela em
+    /// JSON ou MongoDB escreve `dataNascimento` para dizer a mesma coisa que
+    /// `data_nascimento`. Sem isto, F5 teria aberto a porta para o formato que o
+    /// glossario nao alcanca.
+    #[test]
+    fn toda_convencao_de_escrita_da_a_mesma_chave() {
+        for variante in [
+            "dataNascimento",
+            "DataNascimento",
+            "data-nascimento",
+            "data nascimento",
+            "data_nascimento",
+            "datanascimento",
+            "DATA_NASCIMENTO",
+        ] {
+            assert_eq!(
+                normalizar(variante),
+                "datanascimento",
+                "`{variante}` deveria dar a mesma chave"
+            );
+        }
+    }
+
+    /// `endereço` e `endereco` sao a mesma palavra. Um contrato escrito com
+    /// acento nao deveria virar lacuna por causa disso.
+    #[test]
+    fn acento_dobra_para_a_letra_base() {
+        assert_eq!(normalizar("endereço"), "endereco");
+        assert_eq!(normalizar("codigoPostal"), normalizar("código postal"));
+    }
+
+    /// Sigla nao vira uma letra por segmento: `CPF` e `cpf`, nao `c_p_f`.
+    #[test]
+    fn sigla_maiuscula_vira_a_mesma_chave() {
+        assert_eq!(normalizar("CPF"), "cpf");
+        assert_eq!(normalizar("cpfDoCliente"), normalizar("cpf_do_cliente"));
+    }
+
+    /// Nome diferente e campo diferente. `data_nascimento_recebedor` e a data de
+    /// quem recebeu a entrega, e a justificativa de `pessoa.data_nascimento`
+    /// fala do titular: casar os dois produziria laudo com base legal que nao se
+    /// aplica.
+    #[test]
+    fn sufixo_nao_casa_com_o_termo_base() {
+        assert_ne!(
+            normalizar("data_nascimento_recebedor"),
+            normalizar("data_nascimento")
+        );
+        // Plural e abreviacao tambem nao: sao decisao do vocabulario, nao da
+        // funcao de normalizacao.
+        assert_ne!(normalizar("emails"), normalizar("email"));
+        assert_ne!(normalizar("dt_nasc"), normalizar("data_nascimento"));
+    }
+
     /// O contrato dos testes. Antes era `contrato::CAMINHO`; agora que o alvo e
     /// resolvido por run, o valor entra por parametro tambem aqui.
     const ALVO: &str = "contracts/clientes/contract.odcs.yaml";
@@ -674,17 +762,36 @@ termos:
     }
 
     #[test]
-    fn separadores_colapsam_e_bordas_somem() {
-        assert_eq!(normalizar("Nome Completo"), "nome_completo");
-        assert_eq!(normalizar("pessoa.cpf"), "pessoa_cpf");
-        assert_eq!(normalizar("__nr--cpf__"), "nr_cpf");
+    fn separador_e_borda_somem_da_chave() {
+        assert_eq!(normalizar("Nome Completo"), "nomecompleto");
+        assert_eq!(normalizar("pessoa.cpf"), "pessoacpf");
+        assert_eq!(normalizar("__nr--cpf__"), "nrcpf");
     }
 
-    /// Acento nao e normalizado de proposito: casar por aproximacao criaria
-    /// vinculo que ninguem declarou.
+    /// Dois aliases do mesmo termo caindo na mesma chave sao redundancia, nao
+    /// ambiguidade: `e-mail` e `email` apontam para o mesmo lugar. Contar
+    /// ocorrencias em vez de termos fazia a normalizacao canonica reprovar o
+    /// proprio glossario do repositorio.
     #[test]
-    fn acento_nao_e_normalizado() {
-        assert_ne!(normalizar("codigo_postal"), normalizar("código_postal"));
+    fn alias_redundante_do_mesmo_termo_nao_e_defeito() {
+        let g = Glossario {
+            version: "1.0.0".to_string(),
+            termos: vec![Termo {
+                id: "contato.email".to_string(),
+                nome: "E-mail".to_string(),
+                definicao: "Endereco de correio eletronico.".to_string(),
+                aliases: vec![
+                    "email".to_string(),
+                    "e-mail".to_string(),
+                    "E_MAIL".to_string(),
+                ],
+            }],
+        };
+        assert!(
+            defeitos_do_glossario(&g).is_empty(),
+            "{:?}",
+            defeitos_do_glossario(&g)
+        );
     }
 
     #[test]
