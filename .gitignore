@@ -22,3 +22,11 @@
 
 **/*.rs.bk
 *.pdb
+
+# Material do curso — PDFs do kit de onboarding e aulas em HTML.
+#
+# Fica na maquina de quem estuda, como contexto de trabalho, e nao no
+# repositorio: nao e artefato que este projeto produz, veio da plataforma do
+# curso e nao pertence a ninguem que clone isto. O que o projeto tem a dizer
+# sobre o curso esta em `docs/curso.md`, escrito aqui.
+/docs/harness-sob-restricao/
