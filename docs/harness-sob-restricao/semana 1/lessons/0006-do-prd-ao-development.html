@@ -1,0 +1,239 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Projeto aplicado: desenhar em .NET um flow IAO que transforma uma ideia em PRD, especificações e handoff para Development.">
+  <title>0006 · Do PRD ao Development — IAO</title>
+  <link rel="stylesheet" href="../assets/course.css">
+</head>
+<body>
+  <div class="topline"></div>
+  <header class="lesson-header">
+    <div class="reading-shell">
+      <div class="nav-row">
+        <a class="brand" href="../index.html">IAO <span>· lição 0006</span></a>
+        <nav class="nav-links" aria-label="Navegação"><a href="0005-primeiro-piloto.html">Anterior</a><a href="../reference/0004-blueprint-prd-dotnet.html">Blueprint</a><a href="../index.html">Curso</a></nav>
+      </div>
+      <p class="eyebrow">Projeto aplicado · .NET · 25 minutos</p>
+      <h1>Da ideia ao código, sem pular a autorização</h1>
+      <p class="lede">Ao terminar, você terá uma arquitetura concreta para gerar PRDs e especificações rastreáveis, aprová-las e entregá-las ao flow Development sem transformar um parecer do modelo em permissão para editar código.</p>
+      <div class="lesson-meta"><span class="tag">Flows.Specification</span><span class="tag">PRD + SRS + SDD</span><span class="tag">digests</span><span class="tag">handoff</span><span class="tag">.NET</span></div>
+    </div>
+  </header>
+
+  <main class="reading-shell lesson-body">
+    <h2>A decisão arquitetural</h2>
+    <p>Seu sistema deve ter <strong>dois flows completos</strong>. O novo <code>Flows.Specification</code> governa a transformação documental inteira; o <code>Flows.Development</code> existente governa plano, código, verificação e Git. PRD, SRS e SDD são fases causalmente ligadas de um mesmo run — não três flows independentes.</p>
+
+    <div class="mental-model" aria-label="Dois flows e uma fronteira de autorização">
+      <div class="model-node"><small>entrada não confiável</small><strong>Ideia + fontes</strong><span>Problema, usuários, restrições, decisões e dúvidas.</span></div>
+      <span class="model-arrow">→</span>
+      <div class="model-node"><small>flow 1</small><strong>Specification</strong><span>PRD → SRS → SDD → readiness → aprovação.</span></div>
+      <span class="model-arrow">→</span>
+      <div class="model-node"><small>flow 2</small><strong>Development</strong><span>Feature plan → implementação → gates → handoff.</span></div>
+    </div>
+
+    <div class="decision-list">
+      <article class="decision">
+        <h3>Um run documental</h3>
+        <p>Quando o PRD muda, requisitos e design posteriores podem ficar obsoletos. Um único run ID, uma cadeia de digests e uma recascata controlada preservam essa relação.</p>
+      </article>
+      <article class="decision no">
+        <h3>Uma autorização entre flows</h3>
+        <p>Gerar um bundle não concede automaticamente autoridade para alterar código. O início do Development continua uma ação explícita e separada.</p>
+      </article>
+    </div>
+
+    <h2>Você não começa do zero</h2>
+    <p>Uma branch histórica do repositório já implementou <code>Flows.Refinement</code> em .NET. Ela conduzia <code>discover → planning → analysis → design → review</code>, publicava Project Charter, SRS, SDD e Readiness Handoff e permitia recascata até duas vezes.<sup><a href="#s1">1</a></sup> O main atual não contém esse flow, mas preserva um bundle TodoApp produzido por ele.<sup><a href="#s2">2</a></sup></p>
+
+    <div class="callout"><strong>Estratégia:</strong> trate a branch histórica como código-fonte de projeto. Porte as ideias e os testes contra o engine atual; não faça merge cego. O novo nome <code>Flows.Specification</code> deixa explícito o produto desta evolução.</div>
+
+    <table class="ownership-table">
+      <thead><tr><th>Histórico</th><th>Evolução proposta</th><th>Por quê</th></tr></thead>
+      <tbody>
+        <tr><td>Project Charter</td><td>PRD com <code>OBJ-*</code>, <code>MET-*</code> e <code>RSK-*</code></td><td>Evita manter Charter e PRD como duas fontes concorrentes.</td></tr>
+        <tr><td>Markdown escrito livremente</td><td>JSON aceito + Markdown renderizado</td><td>Schema, IDs, referências e digests tornam-se verificáveis por código.</td></tr>
+        <tr><td><code>READY</code> do modelo</td><td>Review semântico + aprovação explícita do digest</td><td>Um modelo pode opinar sobre coerência; não possui autoridade humana.</td></tr>
+        <tr><td>Publicação em <code>docs/</code></td><td>Promoção controlada para o <code>docsFolder</code> ativo</td><td>Development só consome o diretório configurado.</td></tr>
+      </tbody>
+    </table>
+
+    <div class="callout warning"><strong>Nuance essencial:</strong> no flow histórico, o agente que escrevia os documentos também podia responder <code>READY</code>. O harness validava formato, seções, IDs e algumas referências; não provava que a especificação era semanticamente correta nem que uma pessoa a aprovou.</div>
+
+    <h2>A máquina de estados proposta</h2>
+    <pre><code>start
+  ↓
+discover ── fontes insuficientes ──↺ discover
+  ↓
+product  ── PRD inválido ─────────↺ product
+  ↓
+analysis ── SRS inválida ─────────↺ analysis
+  ↓
+design   ── SDD inválido ─────────↺ design
+  ↓
+review
+  ├─ FAIL:product  → product  → analysis → design → review
+  ├─ FAIL:analysis → analysis → design → review
+  ├─ FAIL:design   → design   → review
+  └─ READY         → approve
+                         ├─ revise → fase afetada
+                         └─ approved + digest atual
+                                  ↓
+                           publish interno
+                                  ↓
+                                 stop</code></pre>
+
+    <p>O LLM produz significado dentro das fases. Código .NET valida predicados, persiste artefatos, escolhe a próxima instrução, invalida derivados e aplica limites. O humano resolve conflitos materiais e autoriza o digest exato que será publicado.</p>
+
+    <table class="ownership-table">
+      <thead><tr><th>Fase</th><th>Proposta do agent</th><th>Gate determinístico</th><th>Artefato aceito</th></tr></thead>
+      <tbody>
+        <tr><td><code>discover</code></td><td>Consolidar fatos, premissas, dúvidas e fronteira.</td><td>Schema, tamanho, campos, IDs de dúvidas e fonte/digest.</td><td><code>idea.accepted.json</code></td></tr>
+        <tr><td><code>product</code></td><td>Definir problema, resultados, escopo, métricas, riscos e decisões.</td><td>Objetivos únicos, métricas com medida/alvo, zero bloqueador sem resolução.</td><td><code>prd.accepted.json</code></td></tr>
+        <tr><td><code>analysis</code></td><td>Derivar RF, RN, RNF, SEC e critérios de aceite.</td><td>Cobertura dos objetivos, IDs únicos, referências válidas e critérios não órfãos.</td><td><code>srs.accepted.json</code></td></tr>
+        <tr><td><code>design</code></td><td>Propor componentes, contratos, dados, ADRs e controles.</td><td>Alocação de requisitos, referências existentes, limites e ausência de placeholders.</td><td><code>sdd.accepted.json</code></td></tr>
+        <tr><td><code>review</code></td><td>Avaliar coerência e criar fatias verticais.</td><td>Formato do veredito, DAG das fatias, cobertura e limite de ciclos.</td><td><code>readiness.accepted.json</code></td></tr>
+        <tr><td><code>approve</code></td><td>Apresentar o preview e recolher a decisão.</td><td>Decisão permitida e <code>bundleDigest</code> ainda atual.</td><td><code>approval.json</code></td></tr>
+      </tbody>
+    </table>
+
+    <div class="margin-note">Regra de bolso: LLM interpreta significado; código valida predicados e controla efeitos; humano aceita risco e concede autoridade.</div>
+
+    <h2>JSON é a fonte; Markdown é a projeção</h2>
+    <p>O flow histórico recebia documentos completos nos argumentos do envelope. Para o seu projeto, artefatos grandes devem viajar por arquivos de proposta. Depois da validação, o flow normaliza o JSON, calcula SHA-256 e só então renderiza Markdown de forma determinística.</p>
+
+    <pre><code>{
+  "schema": "iao/prd/v1",
+  "ideaDigest": "sha256:…",
+  "vision": "…",
+  "goals": [
+    { "id": "OBJ-001", "outcome": "…" }
+  ],
+  "successMetrics": [
+    { "id": "MET-001", "measure": "…", "target": "…" }
+  ],
+  "nonGoals": ["…"],
+  "scope": ["…"],
+  "risks": [
+    { "id": "RSK-001", "impact": "…", "mitigation": "…" }
+  ],
+  "blockingQuestions": []
+}</code></pre>
+
+    <p>A cadeia <code>ideaDigest → prdDigest → srsDigest → sddDigest → bundleDigest</code> impede que uma aprovação antiga seja reutilizada depois de uma revisão. Ela prova qual versão foi aprovada; em perfil Core, ainda não prova a identidade de quem aprovou.</p>
+
+    <div class="callout security"><strong>Fronteira de confiança:</strong> se o mesmo agent consegue escrever <code>approval.json</code>, esse arquivo é um gate de processo, não uma aprovação autoritativa. Para uso Controlled, a decisão precisa vir de uma autoridade externa ao workspace gravável pelo agent.</div>
+
+    <h2>O contrato real com Development</h2>
+    <p>Hoje, Development não entende “PRD”. Ele lê todos os arquivos <code>.md</code> e <code>.txt</code> no nível raiz de <code>docsFolder</code>, ordena pelo nome, concatena e corta o conjunto ao atingir <code>docsMaxChars</code> em bytes UTF-8.<sup><a href="#s3">3</a></sup> Não valida status, aprovação, conflitos nem rastreabilidade.</p>
+
+    <p>Use um diretório ativo dedicado e nomes que expressem a ordem:</p>
+    <pre><code>specs/active/
+  00-prd.md
+  10-software-requirements-specification.md
+  20-software-design-document.md
+  30-readiness-handoff.md</code></pre>
+
+    <p>Antes de promover, o <code>DevelopmentReadinessEvaluator</code> deve provar que:</p>
+    <ul>
+      <li>os quatro arquivos vieram do mesmo run e correspondem ao manifesto;</li>
+      <li>o bundle aprovado ainda possui o mesmo digest;</li>
+      <li>o campo de pendências bloqueadoras está vazio e não há fatia com referência quebrada;</li>
+      <li>as dependências das fatias formam um DAG e existe pelo menos uma fatia inicial;</li>
+      <li>a soma que Development realmente lerá fica abaixo do <code>docsMaxChars</code> configurado;</li>
+      <li>a publicação não sobrescreve arquivo que não pertença ao manifesto anterior.</li>
+    </ul>
+
+    <p>O planner downstream transforma o bundle neste shape e depois entrega a cada sessão somente o contexto limitado da feature:<sup><a href="#s4">4</a></sup></p>
+    <pre><code>[
+  {
+    "id": 1,
+    "title": "…",
+    "priority": 1,
+    "dependsOn": [],
+    "description": "…",
+    "references": ["OBJ-001", "RF-001", "AC-001"],
+    "implementationContext": {
+      "requirements": ["…"],
+      "constraints": ["…"],
+      "files": ["…"],
+      "acceptance": ["…"]
+    }
+  }
+]</code></pre>
+
+    <div class="callout warning"><strong>Dois limites downstream:</strong> Development retém no máximo dez features e não volta a injetar o brief inteiro durante a implementação. Portanto, cada fatia precisa carregar referências e aceitação suficientes; iniciativas maiores devem ser divididas em runs, não truncadas silenciosamente.</div>
+
+    <h2>Como fica a solução .NET</h2>
+    <pre><code>src/dotnet/Flows.Specification/
+  Flows.Specification.csproj
+  Program.cs
+  SpecificationTasks.cs
+  SpecificationTasks.Prompt.cs
+  SpecificationModels.cs
+  SpecificationJsonContext.cs
+  SpecificationStore.cs
+  SpecificationEvaluator.cs
+  SpecificationRenderer.cs
+  SpecificationPublisher.cs
+
+src/dotnet/Harness.Engine.Tests/
+  SpecificationEvaluatorTests.cs
+  SpecificationFlowTests.cs
+  SpecificationToDevelopmentTests.cs
+
+.harness/skills/
+  spec-discovery/SKILL.md
+  spec-product/SKILL.md
+  spec-analysis/SKILL.md
+  spec-design/SKILL.md
+  spec-review/SKILL.md</code></pre>
+
+    <p>Mantenha <code>Program.cs</code> como composition root: registra comandos, validators, budget, política de resume e snapshots. Coloque transições em <code>SpecificationTasks</code>; regras puras em evaluators; persistência e digests no store; renderização e promoção em componentes próprios. Use source-generated JSON serialization para preservar compatibilidade com Native AOT.</p>
+
+    <h3>Ordem de implementação</h3>
+    <ol>
+      <li><strong>Contrato:</strong> modelos JSON, renderer e golden files para o bundle TodoApp.</li>
+      <li><strong>Gates:</strong> evaluators puros para IDs, referências, cobertura, DAG, bytes e digests.</li>
+      <li><strong>Flow:</strong> happy path, retry corretivo, recascata, budget, timeout e resume.</li>
+      <li><strong>Aprovação/publicação:</strong> preview, digest, collision safety, staging e manifest-last.</li>
+      <li><strong>Integração:</strong> provar que <code>DocsReader</code> lê exatamente o bundle e que o planner preserva referências/aceitação.</li>
+    </ol>
+
+    <div class="callout"><strong>Melhoria de fase 2:</strong> um <code>development-seed.json</code> poderia eliminar o segundo fatiamento pelo planner. O Development atual ignora JSON, então isso exige um contrato novo de importação; não faça o Specification escrever diretamente em <code>.harness/plan.json</code>.</div>
+
+    <h2>Prática: construa uma linha de rastreabilidade</h2>
+    <p>Escolha uma ideia pequena e escreva quatro linhas: um <code>OBJ-001</code>, um <code>RF-001</code> que o satisfaz, um <code>AC-001</code> binário e uma fatia que os referencia. Depois classifique cada verificação como LLM, código ou humano. Se você enviar essa resposta ao agente professor, ela se torna evidência real para a próxima lição.</p>
+
+    <section class="quiz" data-quiz data-correct-feedback="Correto. Produto fixa intenção e resultado; engenharia deriva o detalhe verificável sem redefinir a necessidade." data-incorrect-feedback="Observe a direção da rastreabilidade: objetivos do produto vêm antes de requisitos, design e features.">
+      <p class="quiz-kicker">Recuperação ativa · fronteira</p>
+      <h2>Qual relação preserva a autoridade?</h2>
+      <p>As alternativas usam exatamente as mesmas palavras.</p>
+      <div class="quiz-options">
+        <button type="button" data-correct="true">Produto define; engenharia detalha.</button>
+        <button type="button" data-correct="false">Engenharia define; produto detalha.</button>
+      </div>
+      <div class="quiz-feedback" data-feedback aria-live="polite">Escolha pensando em quem fixa intenção e quem deriva solução.</div>
+      <button class="complete-button" type="button" data-complete="0006">Marcar lição como concluída</button>
+    </section>
+
+    <section class="source-list">
+      <h2>Fontes da lição</h2>
+      <ol>
+        <li id="s1"><a href="https://github.com/cooperacode/IAO/tree/7e939f6b9d22d70755b51bbd647b05242d67e257/src/dotnet/Flows.Refinement">Flows.Refinement histórico</a>, state machine, validators, recascata e publicação.</li>
+        <li id="s2"><a href="../../assets/use-cases/todo-list-greefield/todoapp-webapi-04-readiness-handoff.md">Readiness Handoff TodoApp</a> e os três documentos irmãos no mesmo diretório.</li>
+        <li id="s3"><a href="../../src/dotnet/Harness.Engine/DocsReader.cs">DocsReader.cs</a>, contrato real de leitura documental.</li>
+        <li id="s4"><a href="../../src/dotnet/Flows.Development/DevelopmentTasks.Prompt.cs">DevelopmentTasks.Prompt.cs</a> e <a href="../../src/dotnet/Harness.Engine/FeatureStore.cs">FeatureStore.cs</a>, shape e limites do plano.</li>
+        <li><a href="../../rfcs/0001-nist-aligned-trustworthy-execution-profile.md">RFC-IAO-0001</a>, approvals, provenance e fronteiras de confiança.</li>
+      </ol>
+    </section>
+
+    <nav class="lesson-nav" aria-label="Lições"><a href="0005-primeiro-piloto.html"><small>Lição anterior</small>← Primeiro piloto</a><a href="../reference/0004-blueprint-prd-dotnet.html"><small>Leve para o projeto</small>Abrir blueprint .NET →</a></nav>
+  </main>
+
+  <footer class="site-footer"><div class="reading-shell"><span>0006 · PRD → Development</span><span>IAO study · projeto .NET</span></div></footer>
+  <script src="../assets/course.js"></script>
+</body>
+</html>

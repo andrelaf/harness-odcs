@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Princípios operacionais de Inverted Agentic Orchestration.">
+  <title>0002 · Princípios operacionais — IAO</title>
+  <link rel="stylesheet" href="../assets/course.css">
+</head>
+<body>
+  <div class="topline"></div>
+  <header class="lesson-header">
+    <div class="reading-shell">
+      <div class="nav-row">
+        <a class="brand" href="../index.html">IAO <span>· lição 0002</span></a>
+        <nav class="nav-links" aria-label="Navegação"><a href="0001-inversao-de-autoridade.html">Anterior</a><a href="../reference/0001-glossario-iao.html">Glossário</a><a href="0003-arquitetura-em-camadas.html">Próxima</a></nav>
+      </div>
+      <p class="eyebrow">Princípios · 12 minutos</p>
+      <h1>Princípios que sobrevivem ao prompt</h1>
+      <p class="lede">Ao terminar, você poderá auditar um workflow agentic usando cinco perguntas: onde vive o estado, qual é o contrato, quem valida, quais são os limites e que evidência permanece.</p>
+      <div class="lesson-meta"><span class="tag">estado</span><span class="tag">contratos</span><span class="tag">gates</span><span class="tag">evidência</span></div>
+    </div>
+  </header>
+
+  <main class="reading-shell lesson-body">
+    <h2>Uma lente, não uma lista de features</h2>
+    <p>IAO não é definido por usar JSON, Git ou uma linguagem específica. Esses são mecanismos da implementação. O padrão se mantém quando cinco propriedades estruturais continuam verdadeiras:</p>
+
+    <div class="principle-grid">
+      <article class="principle-card"><h3>1 · Estado fora do chat</h3><p>O run se reconstitui de arquivos autoritativos, não da memória conversacional.</p></article>
+      <article class="principle-card"><h3>2 · Contrato por turno</h3><p>Cada instrução diz o input e a forma de resposta esperada.</p></article>
+      <article class="principle-card"><h3>3 · Gate antes do avanço</h3><p>O harness observa realidade verificável antes de aceitar a transição.</p></article>
+      <article class="principle-card"><h3>4 · Loop limitado</h3><p>Passos, tempo, retries, tamanho e efeitos têm limites explícitos.</p></article>
+      <article class="principle-card"><h3>5 · Evidência persistente</h3><p>A trajetória pode ser examinada sem depender do histórico do chat.</p></article>
+      <article class="principle-card"><h3>6 · Política separada</h3><p>O engine fornece mecanismo; o flow concentra regras do domínio.</p></article>
+    </div>
+
+    <h2>1. Estado fora da conversa</h2>
+    <p>Cada invocação do harness é um processo novo. Continuidade vem de <code>state.json</code>, <code>run_config.json</code>, backlog, trace, <code>progress.txt</code> e Git.<sup><a href="#s1">1</a></sup> Isso permite resetar o contexto entre features e até trocar o driver sem depender de uma recapitulação perfeita.</p>
+    <div class="margin-note">Uma boa pergunta de projeto: “Se o chat desaparecesse agora, quais arquivos permitiriam continuar sem adivinhar?”</div>
+
+    <h2>2. Um contrato estreito por turno</h2>
+    <p>O envelope reduz a conversa a um comando estruturado. O harness emite <code>&lt;input&gt;</code> e <code>&lt;response&gt;</code>; o driver realiza somente a etapa ativa e devolve a forma solicitada. Comandos malformados recebem erro corretivo em vez de um término silencioso.<sup><a href="#s2">2</a></sup></p>
+    <p>Contrato estreito não é só estética. Ele impede que o modelo precise carregar o estado inteiro e torna parsing, validação e testes independentes do provedor.</p>
+
+    <h2>3. Realidade antes de autodeclaração</h2>
+    <p>O agent pode propor; o ambiente deve confirmar. No Development, o resumo vem do diff, a verificação vem do exit code e o handoff inspeciona o repositório. Texto <code>PASS</code> ou um hash enviado pelo driver não fecha a feature.<sup><a href="#s3">3</a></sup></p>
+
+    <table class="ownership-table">
+      <thead><tr><th>Alegação</th><th>Evidência melhor</th></tr></thead>
+      <tbody>
+        <tr><td>“Implementei a feature.”</td><td>Diff limitado + gate executável.</td></tr>
+        <tr><td>“Os testes passaram.”</td><td>Exit code, log e ambiente identificável.</td></tr>
+        <tr><td>“O handoff foi feito.”</td><td>Commit e working tree inspecionados.</td></tr>
+        <tr><td>“Terminamos.”</td><td>Backlog sem itens pendentes e estado terminal tipado.</td></tr>
+      </tbody>
+    </table>
+
+    <h2>4. O loop também é produto</h2>
+    <p>Loop engineering chama atenção para a estrutura da iteração: feedback, checkpoints, condições de saída e limites. No código atual, o Development limita features, passos por feature e revisões do plano; o engine aplica budgets e timeout.<sup><a href="#s4">4</a></sup> Um loop sem saída definida transforma autonomia em custo acumulado.</p>
+
+    <h2>5. Evidência é parte do resultado</h2>
+    <p><code>Trace</code> registra cada comando externo, outcome, custo em bytes, timestamp e o hash da linha anterior. <code>HarnessLog</code> registra entrada e saída de tasks; snapshots congelam o estado ao encerrar.<sup><a href="#s5">5</a></sup> O objetivo não é registrar o raciocínio privado do modelo, mas sustentar afirmações operacionais sobre o run.</p>
+
+    <h2>6. Mecanismo e domínio não se misturam</h2>
+    <p><code>Harness.Engine</code> não sabe o que é uma feature. Ele sabe parsear, limitar, despachar, persistir e emitir. <code>Flows.Development</code> sabe planejar, selecionar, verificar e fazer handoff. Essa separação é o que permite testar o workflow como código e trocar drivers sem reescrever a política.</p>
+
+    <h2>O princípio que impede uma conclusão perigosa</h2>
+    <div class="callout security"><strong>Controle determinístico não implica execução segura.</strong> Se o workspace pode alterar política, verificador e evidência, um harness pode repetir com grande consistência uma ação insegura. O RFC trata agent e target como não confiáveis e propõe policy protegida, capability broker, approvals e verificação independente para os níveis Controlled/Assured.<sup><a href="#s6">6</a></sup></div>
+
+    <p>A baseline atual oferece propriedades valiosas de IAO Core, mas não deve ser apresentada como fronteira de segurança completa. Em particular, o <code>verify-feature.sh</code> preferido vive no target editável pelo agent, e o auto-handoff cria commit automaticamente. Para um piloto local e reversível isso pode ser aceitável; para código sensível, é uma decisão explícita de risco.</p>
+
+    <h2>Prática: audite um workflow em cinco perguntas</h2>
+    <p>Pense em um uso seu — por exemplo, “corrigir issues automaticamente”. Sem desenhar a solução ainda, escreva uma linha para cada pergunta:</p>
+    <ol>
+      <li><strong>Estado:</strong> o que precisa sobreviver ao chat?</li>
+      <li><strong>Contrato:</strong> qual resposta mínima cada etapa devolve?</li>
+      <li><strong>Gate:</strong> o que o ambiente pode provar antes de avançar?</li>
+      <li><strong>Limite:</strong> quando o sistema deve parar mesmo sem sucesso?</li>
+      <li><strong>Evidência:</strong> o que alguém verificará amanhã?</li>
+    </ol>
+
+    <section class="quiz" data-quiz data-correct-feedback="Correto. O componente probabilístico propõe; o gate determinístico valida antes da transição." data-incorrect-feedback="Relembre a diferença entre produzir uma solução e provar que ela satisfaz o gate.">
+      <p class="quiz-kicker">Recuperação ativa · sem consultar a tabela</p>
+      <h2>Quem propõe e quem valida?</h2>
+      <p>Escolha a distribuição coerente com os princípios. As alternativas reutilizam exatamente as mesmas palavras.</p>
+      <div class="quiz-options">
+        <button type="button" data-correct="true">Modelo propõe; código valida.</button>
+        <button type="button" data-correct="false">Código propõe; modelo valida.</button>
+      </div>
+      <div class="quiz-feedback" data-feedback aria-live="polite">Responda a partir do princípio de evidência.</div>
+      <button class="complete-button" type="button" data-complete="0002">Marcar lição como concluída</button>
+    </section>
+
+    <div class="callout"><strong>Leitura primária recomendada:</strong> leia <a href="https://www.anthropic.com/engineering/effective-harnesses-for-long-running-agents">Effective harnesses for long-running agents</a>, especialmente “Feature list”, “Incremental progress” e “Testing”. Observe como os artefatos persistentes respondem às cinco perguntas acima.</div>
+
+    <p><strong>Antes de seguir:</strong> envie suas cinco linhas ao agente professor. O feedback sobre um caso real é o ponto em que exposição começa a virar habilidade.</p>
+
+    <section class="source-list">
+      <h2>Fontes da lição</h2>
+      <ol>
+        <li id="s1"><a href="https://github.com/cooperacode/IAO/blob/8f58c47bfdb2d2022e31a485fba8018341de60bb/ARCHITECTURE.md#L174-L229">IAO Architecture — Persistence and telemetry</a>.</li>
+        <li id="s2"><a href="https://github.com/cooperacode/IAO/blob/8f58c47bfdb2d2022e31a485fba8018341de60bb/ARCHITECTURE.md#L99-L130">IAO Architecture — Entry and dispatch</a>.</li>
+        <li id="s3"><a href="https://github.com/cooperacode/IAO/blob/8f58c47bfdb2d2022e31a485fba8018341de60bb/src/dotnet/Flows.Development/DevelopmentTasks.cs#L235-L293">DevelopmentTasks — verify e handoff</a>.</li>
+        <li id="s4"><a href="https://www.ibm.com/think/topics/loop-engineering">IBM — What is loop engineering?</a> e <a href="https://github.com/cooperacode/IAO/blob/8f58c47bfdb2d2022e31a485fba8018341de60bb/src/dotnet/Flows.Development/DevelopmentTasks.cs#L11-L25">budgets do Development</a>.</li>
+        <li id="s5"><a href="https://github.com/cooperacode/IAO/blob/8f58c47bfdb2d2022e31a485fba8018341de60bb/src/dotnet/Harness.Engine/Trace.cs#L49-L90">Trace — append e hash-chain</a>.</li>
+        <li id="s6"><a href="https://github.com/cooperacode/IAO/blob/8f58c47bfdb2d2022e31a485fba8018341de60bb/rfcs/0001-nist-aligned-trustworthy-execution-profile.md#L285-L324">RFC-IAO-0001 — separation of planes e policy authority</a>.</li>
+      </ol>
+    </section>
+
+    <nav class="lesson-nav" aria-label="Lições"><a href="0001-inversao-de-autoridade.html"><small>Lição anterior</small>← Inversão de autoridade</a><a href="0003-arquitetura-em-camadas.html"><small>Próxima lição</small>Arquitetura em camadas →</a></nav>
+  </main>
+
+  <footer class="site-footer"><div class="reading-shell"><span>0002 · Princípios operacionais</span><span>IAO study · baseline <code>8f58c47</code></span></div></footer>
+  <script src="../assets/course.js"></script>
+</body>
+</html>

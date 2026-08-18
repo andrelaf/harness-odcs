@@ -45,6 +45,18 @@ regras se descobrem errando.
 **`harness sugerir`** — para cada campo sem termo, mostrar os termos parecidos.
 Transforma "lacuna" em "você quis dizer `contato.telefone`?".
 
+**Plugin de editor — em repositório próprio, e não aqui.** A separação não é de
+escopo, é de natureza: este projeto promete determinismo, e um plugin com modelo
+dentro não pode prometer isso. Juntá-los abriria a porta para alguém pedir ao
+modelo que "ajude a decidir" uma classificação — e a garantia que sustenta o
+laudo cairia junto.
+
+Há uma ordem obrigatória: o plugin só existe depois de `termos`. Sem ela, ele
+reimplementa o casamento com o glossário, e passam a existir duas
+implementações da mesma regra. Com ela, o plugin apenas orquestra — entende o
+pedido, redige o YAML, consulta o vocabulário, roda `check`, lê a lacuna. Nunca
+julga.
+
 ## Escala e operação
 
 **Lote ou CLI de vida longa.** 530 ms por invocação de container, ~11 por

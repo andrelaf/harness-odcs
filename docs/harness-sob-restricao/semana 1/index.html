@@ -1,0 +1,142 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Curso guiado sobre fundamentos, princípios, arquitetura e adoção de Inverted Agentic Orchestration.">
+  <title>IAO — estudo guiado</title>
+  <link rel="stylesheet" href="assets/course.css">
+</head>
+<body>
+  <div class="topline"></div>
+  <header class="site-header">
+    <div class="site-shell nav-row">
+      <a class="brand" href="index.html">IAO <span>· estudos</span></a>
+      <nav class="nav-links" aria-label="Navegação principal">
+        <a href="#curso" aria-current="page">Curso</a>
+        <a href="#referencias">Referências</a>
+        <a href="MISSION.md">Missão</a>
+        <a href="RESOURCES.md">Fontes</a>
+      </nav>
+    </div>
+  </header>
+
+  <main>
+    <section class="hero">
+      <div class="site-shell hero-grid">
+        <div>
+          <p class="eyebrow">Inverted Agentic Orchestration</p>
+          <h1>O agente cria. O harness decide.</h1>
+          <p class="lede">Um estudo curto e prático para reconhecer a inversão de autoridade, ler a arquitetura, projetar loops verificáveis e começar um piloto sem confundir controle determinístico com segurança.</p>
+        </div>
+        <aside class="hero-note">
+          <strong>Missão em uma frase</strong>
+          <p>Sair de uma ideia de automação agentic para um piloto pequeno, retomável, limitado e sustentado por evidência real.</p>
+        </aside>
+      </div>
+      <div class="site-shell progress-wrap" aria-label="Progresso local do curso">
+        <div class="progress-meta"><span>Seu progresso neste navegador</span><span data-progress-text>0 de 6 lições marcadas</span></div>
+        <div class="progress-track"><div class="progress-bar" data-progress-bar></div></div>
+      </div>
+    </section>
+
+    <section id="curso" class="section">
+      <div class="site-shell">
+        <div class="section-heading">
+          <span class="section-number">01 / percurso</span>
+          <div>
+            <h2>Seis vitórias pequenas</h2>
+            <p>Faça uma lição por vez. Cada uma termina com recuperação ativa; marcar “concluída” registra apenas progresso local, não uma evidência formal de aprendizagem.</p>
+          </div>
+        </div>
+
+        <div class="course-grid">
+          <a class="course-card" data-lesson-card="0001" href="lessons/0001-inversao-de-autoridade.html">
+            <span class="card-index">0001</span>
+            <h3>Quem decide o próximo passo?</h3>
+            <p>Construa o modelo mental essencial e reconheça o que realmente foi invertido.</p>
+            <span class="card-meta"><span>10 min</span><span class="completion-dot" aria-hidden="true"></span></span>
+          </a>
+          <a class="course-card" data-lesson-card="0002" href="lessons/0002-principios-operacionais.html">
+            <span class="card-index">0002</span>
+            <h3>Princípios que sobrevivem ao prompt</h3>
+            <p>Use estado, contratos, gates, limites e evidências para governar o loop.</p>
+            <span class="card-meta"><span>12 min</span><span class="completion-dot" aria-hidden="true"></span></span>
+          </a>
+          <a class="course-card" data-lesson-card="0003" href="lessons/0003-arquitetura-em-camadas.html">
+            <span class="card-index">0003</span>
+            <h3>Do driver ao projeto-alvo</h3>
+            <p>Siga um turno pelas cinco camadas e pelo flow Development atual.</p>
+            <span class="card-meta"><span>15 min</span><span class="completion-dot" aria-hidden="true"></span></span>
+          </a>
+          <a class="course-card" data-lesson-card="0004" href="lessons/0004-decisao-de-adocao.html">
+            <span class="card-index">0004</span>
+            <h3>Quando IAO merece existir?</h3>
+            <p>Faça o teste de adequação e desenhe a fronteira de confiança do piloto.</p>
+            <span class="card-meta"><span>12 min</span><span class="completion-dot" aria-hidden="true"></span></span>
+          </a>
+          <a class="course-card" data-lesson-card="0005" href="lessons/0005-primeiro-piloto.html">
+            <span class="card-index">0005</span>
+            <h3>Protocolo na mão, piloto no chão</h3>
+            <p>Execute o HelloWorld e prepare a adoção do Development em uma branch isolada.</p>
+            <span class="card-meta"><span>20–30 min</span><span class="completion-dot" aria-hidden="true"></span></span>
+          </a>
+          <a class="course-card" data-lesson-card="0006" href="lessons/0006-do-prd-ao-development.html">
+            <span class="card-index">0006</span>
+            <h3>Da ideia ao Development</h3>
+            <p>Projete em .NET o flow que gera PRD, especificações e um handoff consumível.</p>
+            <span class="card-meta"><span>25 min</span><span class="completion-dot" aria-hidden="true"></span></span>
+          </a>
+        </div>
+      </div>
+    </section>
+
+    <section id="referencias" class="section">
+      <div class="site-shell">
+        <div class="section-heading">
+          <span class="section-number">02 / consulta</span>
+          <div>
+            <h2>Volte aqui durante o trabalho</h2>
+            <p>Lições constroem entendimento; referências comprimem o que você precisa recuperar depressa quando estiver projetando ou depurando um flow.</p>
+          </div>
+        </div>
+        <div class="reference-grid">
+          <a class="reference-card" href="reference/0001-glossario-iao.html">
+            <h3>Glossário IAO</h3>
+            <p>Termos canônicos e distinções que evitam conversas ambíguas.</p>
+          </a>
+          <a class="reference-card" href="reference/0002-mapa-arquitetura.html">
+            <h3>Mapa de arquitetura</h3>
+            <p>Responsabilidades, fluxo por turno, stores e fronteiras.</p>
+          </a>
+          <a class="reference-card" href="reference/0003-checklist-adocao.html">
+            <h3>Checklist de adoção</h3>
+            <p>Fit, preparo do repositório, execução, evidência e segurança.</p>
+          </a>
+          <a class="reference-card" href="reference/0004-blueprint-prd-dotnet.html">
+            <h3>Blueprint PRD → Development</h3>
+            <p>Estados, contratos, artefatos, gates e estrutura do projeto .NET.</p>
+          </a>
+        </div>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="site-shell">
+        <div class="section-heading">
+          <span class="section-number">03 / baseline</span>
+          <div>
+            <h2>Leia a arquitetura com data e commit</h2>
+            <p>Este estudo observa o commit <code>8f58c47</code> em 13/08/2026. O código já registra <code>replan</code>, embora README e ARCHITECTURE ainda descrevam oito comandos. Valores do Quickstart também divergem do <code>harness.json</code> empacotado. A lição aplicada consulta ainda o histórico <code>7e939f6</code>, onde existiu <code>Flows.Refinement</code>; ele é fonte de projeto, não funcionalidade do main. Essas diferenças fazem parte do aprendizado: documentação é evidência, não autoridade infalível.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <div class="site-shell"><span>IAO · estudo guiado em português</span><span>Faça perguntas ao agente sempre que uma fronteira ficar nebulosa.</span></div>
+  </footer>
+  <script src="assets/course.js"></script>
+</body>
+</html>

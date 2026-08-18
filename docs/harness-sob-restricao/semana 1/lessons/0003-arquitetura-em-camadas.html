@@ -1,0 +1,123 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Arquitetura em camadas de Inverted Agentic Orchestration.">
+  <title>0003 · Arquitetura em camadas — IAO</title>
+  <link rel="stylesheet" href="../assets/course.css">
+</head>
+<body>
+  <div class="topline"></div>
+  <header class="lesson-header">
+    <div class="reading-shell">
+      <div class="nav-row">
+        <a class="brand" href="../index.html">IAO <span>· lição 0003</span></a>
+        <nav class="nav-links" aria-label="Navegação"><a href="0002-principios-operacionais.html">Anterior</a><a href="../reference/0002-mapa-arquitetura.html">Mapa</a><a href="0004-decisao-de-adocao.html">Próxima</a></nav>
+      </div>
+      <p class="eyebrow">Arquitetura · 15 minutos</p>
+      <h1>Do driver ao projeto-alvo</h1>
+      <p class="lede">Ao terminar, você conseguirá seguir um turno pelas cinco camadas, localizar a autoridade de cada componente e descrever o loop Development implementado hoje.</p>
+      <div class="lesson-meta"><span class="tag">driver</span><span class="tag">transport</span><span class="tag">engine</span><span class="tag">flow</span><span class="tag">target</span></div>
+    </div>
+  </header>
+
+  <main class="reading-shell lesson-body">
+    <h2>A pilha inteira em uma frase</h2>
+    <p>O <strong>driver</strong> entrega uma resposta pelo <strong>transport</strong>; o <strong>engine</strong> aplica protocolo e guardrails; o <strong>flow</strong> executa a política do domínio; o <strong>target</strong> fornece os efeitos e a realidade que os gates observam.</p>
+
+    <div class="layer-grid">
+      <article class="layer-card"><h3>A · Driver</h3><p>IDE agent. Lê a instrução, usa ferramentas, altera o target e devolve JSON. Não escolhe a transição.</p></article>
+      <article class="layer-card"><h3>B · Transport</h3><p><code>inbox.json</code> entra; <code>stdout</code> sai. <code>stderr</code> fica reservado a diagnóstico.</p></article>
+      <article class="layer-card"><h3>C · Engine</h3><p>Host, registry, parser, guards, prompt, config, stores, trace e infraestrutura.</p></article>
+      <article class="layer-card"><h3>D · Flow</h3><p>Política específica: tasks, transições, feature DAG, verificação, handoff e replan.</p></article>
+      <article class="layer-card"><h3>E · Target</h3><p>Código, testes, <code>init.sh</code>, verificador, progresso e Git — editável, portanto não confiável por padrão.</p></article>
+    </div>
+
+    <h2>Siga um turno</h2>
+    <p>O fluxo real não é uma conversa contínua dentro de um processo. Cada chamada ao runner cria uma nova invocação; a continuidade é reconstruída de stores.</p>
+
+    <div class="flow" aria-label="Pipeline de um turno">
+      <div class="flow-row"><div class="flow-label">entrada</div><div class="flow-copy"><strong>Inbox ou argv</strong><p>O adapter prefere escrever JSON real em <code>.harness/inbox.json</code> para evitar escaping frágil.</p></div></div>
+      <div class="flow-row"><div class="flow-label">host</div><div class="flow-copy"><strong><code>HarnessHost</code></strong><p>É a entrada reutilizável e o único componente que escreve a resposta de controle em <code>stdout</code>.</p></div></div>
+      <div class="flow-row"><div class="flow-label">dispatch</div><div class="flow-copy"><strong><code>TaskRegistry</code></strong><p>Parseia, decide reset/resume, aplica latch, budget, timeout e roteia pelo comando.</p></div></div>
+      <div class="flow-row"><div class="flow-label">política</div><div class="flow-copy"><strong>Task do flow</strong><p>Lê e altera stores, observa o target e devolve o próximo prompt ou <code>stop</code>.</p></div></div>
+      <div class="flow-row"><div class="flow-label">saída</div><div class="flow-copy"><strong>Trace + instrução</strong><p>O outcome é persistido; <code>PromptFormatter</code> apresenta input, response e a skill da etapa.</p></div></div>
+    </div>
+
+    <p>O próximo “estado” não é um enum completo persistido. Na implementação, ele é materializado pelo comando do envelope que a task devolve; <code>HarnessState</code> guarda passo, dados, contexto, custo e motivo terminal.<sup><a href="#s1">1</a></sup> É uma máquina de estados por protocolo e transições, não necessariamente por uma classe chamada <code>StateMachine</code>.</p>
+
+    <h2>Engine fornece mecanismo; flow fornece significado</h2>
+    <table class="ownership-table">
+      <thead><tr><th>Componente</th><th>Sabe fazer</th><th>Não precisa saber</th></tr></thead>
+      <tbody>
+        <tr><td>Envelope</td><td>Representar o comando e contexto opcional.</td><td>O que “implementar” significa.</td></tr>
+        <tr><td>TaskRegistry</td><td>Aplicar guards e despachar.</td><td>Qual feature tem prioridade.</td></tr>
+        <tr><td>StateStore</td><td>Persistir chaves e passo.</td><td>O significado de <code>current_feature_id</code>.</td></tr>
+        <tr><td>FeatureStore</td><td>Validar DAG e escolher item pronto.</td><td>Como escrever o código.</td></tr>
+        <tr><td>DevelopmentTasks</td><td>Planejar, selecionar, verificar, revisar e entregar.</td><td>Como o provedor chama o modelo.</td></tr>
+      </tbody>
+    </table>
+
+    <h2>O loop Development observado no código</h2>
+    <p>Num run novo, <code>start</code> lê <code>specs/</code> e pede um plano. O planner grava <code>.harness/plan.json</code>; <code>plan</code> valida o DAG, limita a dez features e persiste <code>targetDir</code>, verificador e <code>runId</code>. Depois o próprio harness faz bearings, smoke e pick antes de emitir o turno criativo de implementação.<sup><a href="#s2">2</a></sup></p>
+
+    <pre><code>start
+  ├─ novo → plan ───────────────────────┐
+  └─ resume ────────────────────────────┤
+                                       ▼
+            [bearings → smoke → pick] internos
+                                       ↓
+                                  implement
+                                       ↓
+                                  auto-verify
+                     ┌── FAIL ──────────┴──── PASS ─┐
+                     │                              │
+                     └─ fix → implement      auto-handoff
+                          └─ 3ª falha               ↓
+                               → replan       próxima feature
+                                                  ou stop</code></pre>
+
+    <p>Se a verificação falhar três vezes e ainda houver quota, o harness registra uma observação e pede uma proposta de <code>replan</code>. Um avaliador determinístico verifica alternativas, cobertura, preservação do que já passou, DAG e budget; só então a revisão é aplicada. O limite atual é duas revisões.<sup><a href="#s3">3</a></sup></p>
+
+    <div class="callout warning"><strong>Documentação versus implementação:</strong> README e ARCHITECTURE ainda descrevem uma máquina de oito comandos. <code>Program.cs</code> registra nove: <code>start</code>, <code>plan</code>, <code>replan</code>, <code>bearings</code>, <code>smoke</code>, <code>pick</code>, <code>implement</code>, <code>verify</code> e <code>handoff</code>.<sup><a href="#s4">4</a></sup> Aprender a comparar diagrama, composição e código faz parte da leitura arquitetural.</div>
+
+    <h2>Onde termina o harness?</h2>
+    <p>O engine deliberadamente não inclui um cliente de API de modelo e não fornece sandbox. O driver é a conexão ao modelo e o ambiente/IDE fornece permissões.<sup><a href="#s5">5</a></sup> Essa fronteira mantém o core portátil, mas cria a tensão central com o RFC Controlled, que exige mediação de efeitos por um control plane protegido.</p>
+
+    <p>Outro detalhe: o target também guarda parte da memória operacional — <code>init.sh</code>, <code>verify-feature.sh</code>, <code>progress.txt</code> e Git. Isso permite sessões limpas, porém o mesmo agent pode editar alguns desses artefatos. Persistência resolve continuidade; não resolve sozinha integridade ou independência.</p>
+
+    <section class="quiz" data-quiz data-correct-feedback="Isso. O flow define a política do domínio; o engine executa o mecanismo genérico do protocolo." data-incorrect-feedback="Pense em qual camada sabe o que é uma feature e qual apenas sabe despachar uma task.">
+      <p class="quiz-kicker">Recuperação ativa · responsabilidades</p>
+      <h2>Qual relação está correta?</h2>
+      <p>As alternativas têm as mesmas palavras. Escolha pela direção da dependência.</p>
+      <div class="quiz-options">
+        <button type="button" data-correct="true">Flow define; engine executa.</button>
+        <button type="button" data-correct="false">Engine define; flow executa.</button>
+      </div>
+      <div class="quiz-feedback" data-feedback aria-live="polite">Responda sem consultar a tabela.</div>
+      <button class="complete-button" type="button" data-complete="0003">Marcar lição como concluída</button>
+    </section>
+
+    <div class="callout"><strong>Leitura primária recomendada:</strong> abra a <a href="../../ARCHITECTURE.md#figure-8--high-level-architecture-consolidated-view">Figure 8 de ARCHITECTURE.md</a> e, em seguida, leia as 42 linhas de <a href="../../src/dotnet/Flows.Development/Program.cs">Program.cs</a>. Tente apontar onde cada camada do diagrama entra na composição real.</div>
+
+    <p><strong>Antes de seguir:</strong> sem olhar, desenhe cinco caixas — driver, transport, engine, flow e target — e escreva uma responsabilidade em cada. Se uma seta ou fronteira parecer ambígua, pergunte ao agente professor.</p>
+
+    <section class="source-list">
+      <h2>Fontes da lição</h2>
+      <ol>
+        <li id="s1"><a href="https://github.com/cooperacode/IAO/blob/8f58c47bfdb2d2022e31a485fba8018341de60bb/src/dotnet/Harness.Engine/HarnessState.cs">HarnessState.cs</a> e <a href="https://github.com/cooperacode/IAO/blob/8f58c47bfdb2d2022e31a485fba8018341de60bb/src/dotnet/Harness.Engine/StateStore.cs#L36-L72">StateStore.cs</a>.</li>
+        <li id="s2"><a href="https://github.com/cooperacode/IAO/blob/8f58c47bfdb2d2022e31a485fba8018341de60bb/src/dotnet/Flows.Development/DevelopmentTasks.cs#L76-L232">DevelopmentTasks — start a pick</a>.</li>
+        <li id="s3"><a href="https://github.com/cooperacode/IAO/blob/8f58c47bfdb2d2022e31a485fba8018341de60bb/src/dotnet/Flows.Development/DevelopmentTasks.cs#L155-L181">DevelopmentTasks — replan</a> e <a href="https://github.com/cooperacode/IAO/blob/8f58c47bfdb2d2022e31a485fba8018341de60bb/src/dotnet/Harness.Engine/PlanRevisionEvaluator.cs">PlanRevisionEvaluator.cs</a>.</li>
+        <li id="s4"><a href="https://github.com/cooperacode/IAO/blob/8f58c47bfdb2d2022e31a485fba8018341de60bb/src/dotnet/Flows.Development/Program.cs#L7-L18">Program.cs — tasks registradas</a>.</li>
+        <li id="s5"><a href="https://github.com/cooperacode/IAO/blob/8f58c47bfdb2d2022e31a485fba8018341de60bb/ARCHITECTURE.md#L231-L255">IAO Architecture — Infrastructure and boundaries</a>.</li>
+      </ol>
+    </section>
+
+    <nav class="lesson-nav" aria-label="Lições"><a href="0002-principios-operacionais.html"><small>Lição anterior</small>← Princípios operacionais</a><a href="0004-decisao-de-adocao.html"><small>Próxima lição</small>Decisão de adoção →</a></nav>
+  </main>
+
+  <footer class="site-footer"><div class="reading-shell"><span>0003 · Arquitetura em camadas</span><span>IAO study · baseline <code>8f58c47</code></span></div></footer>
+  <script src="../assets/course.js"></script>
+</body>
+</html>
