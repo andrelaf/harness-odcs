@@ -68,6 +68,11 @@ impl FeatureList {
                 f("f3-classificar", 3, "Classificar PII/LGPD por campo"),
                 f("f4-gate", 4, "Gate humano + relatorio de lacunas"),
                 f("f5-aninhado", 5, "Cobertura de estrutura aninhada"),
+                f(
+                    "f6-divergencia",
+                    6,
+                    "Divergencia preservada ate decisao humana",
+                ),
             ],
         }
     }

@@ -323,6 +323,7 @@ Semana 4 de 4. As quatro features rodam de ponta a ponta, a medição é derivad
 | F3 · Classificar — [spec](docs/spec-f3-classificar.md) | pronta · catálogo LGPD em campos ODCS |
 | F4 · Gate + relatório — [spec](docs/spec-f4-gate.md) | pronta · contrato enriquecido, lacunas e pausa humana |
 | F5 · Cobertura aninhada — [spec](docs/spec-f5-aninhado.md) | pronta · objeto e array percorridos, `classification` na folha |
+| F6 · Divergência preservada — [spec](docs/spec-f6-divergencia.md) | pronta · o harness deixa de escolher lado numa contradição |
 | Medição (custo, duração, erros) | pronta · `./run.sh metrics`, derivada do trace |
 | Verificação em pull request — [`.github/`](.github/README.md) | pronta · `./run.sh check`, workflow e CODEOWNERS |
 | [`docs/git-flow.md`](docs/git-flow.md) — branch, PR e merge | pronto · convenção verificada no CI |

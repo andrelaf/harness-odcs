@@ -290,8 +290,15 @@ pub(crate) fn compor(run: &mut Run, fase: &str) -> Result<Composicao, String> {
     let declarados = declaracao_do_yaml(&bruto).map_err(|e| format!("{e:#}"))?;
     let campos = confrontar(&laudo.campos, &declarados);
     let gate = itens_de_gate(&campos);
+    // Quem discorda do catalogo fica como esta. `confrontar` ja sabe quem sao;
+    // essa informacao era descartada antes de chegar em quem escreve.
+    let preservar: BTreeSet<String> = campos
+        .iter()
+        .filter(|c| c.mudanca == Mudanca::Reclassificacao)
+        .map(|c| c.campo.clone())
+        .collect();
     let (yaml_enriquecido, nao_aplicados) =
-        aplicar(&bruto, &laudo.campos).map_err(|e| format!("{e:#}"))?;
+        aplicar(&bruto, &laudo.campos, &preservar).map_err(|e| format!("{e:#}"))?;
 
     let proposta = Proposta {
         contrato: alvo,
@@ -1071,12 +1078,22 @@ pub fn hash_do_gate(itens: &[ItemDeGate]) -> String {
 /// Custo assumido: o YAML e reserializado inteiro, entao comentarios e linhas
 /// em branco se perdem. A alternativa — costurar linhas por posicao para
 /// preservar formatacao — quebra no primeiro contrato com indentacao diferente.
-pub fn aplicar(bruto: &str, campos: &[CampoClassificado]) -> Result<(String, Vec<String>)> {
+pub fn aplicar(
+    bruto: &str,
+    campos: &[CampoClassificado],
+    preservar: &BTreeSet<String>,
+) -> Result<(String, Vec<String>)> {
     let mut doc: Value = serde_norway::from_str(bruto).context("contrato nao e YAML valido")?;
 
     let por_nome: BTreeMap<&str, &CampoClassificado> = campos
         .iter()
         .filter(|c| c.situacao == Situacao::Classificado)
+        // Campo em reclassificacao **nao** e escrito. O contrato declara uma
+        // coisa e o catalogo diz outra, e sobrescrever resolveria a divergencia
+        // a favor do catalogo sem ninguem ter decidido — que e exatamente o que
+        // este harness promete nao fazer. A divergencia sobrevive no arquivo, o
+        // gate a nomeia e o laudo registra as duas versoes.
+        .filter(|c| !preservar.contains(&c.campo))
         .map(|c| (c.campo.as_str(), c))
         .collect();
     let mut aplicados: BTreeSet<String> = BTreeSet::new();
@@ -1521,7 +1538,7 @@ classificacoes:
     /// O contrato ja enriquecido, com o catalogo inalterado, fica quieto.
     #[test]
     fn contrato_ja_enriquecido_nao_abre_gate_de_reclassificacao() {
-        let (enriquecido, _) = aplicar(CONTRATO, &laudo().campos).unwrap();
+        let (enriquecido, _) = aplicar(CONTRATO, &laudo().campos, &BTreeSet::new()).unwrap();
         let campos = confronto_de(&enriquecido);
         assert_eq!(
             campos.iter().find(|c| c.campo == "cpf").unwrap().mudanca,
@@ -1620,7 +1637,7 @@ classificacoes:
 
     #[test]
     fn campo_classificado_recebe_os_tres_campos_odcs() {
-        let (yaml, nao_aplicados) = aplicar(CONTRATO, &laudo().campos).unwrap();
+        let (yaml, nao_aplicados) = aplicar(CONTRATO, &laudo().campos, &BTreeSet::new()).unwrap();
         assert!(nao_aplicados.is_empty(), "{nao_aplicados:?}");
 
         let d = declaracao_do_yaml(&yaml).unwrap();
@@ -1634,7 +1651,7 @@ classificacoes:
     /// Nao-PII nao ganha tag nenhuma — `tags: []` seria ruido no contrato.
     #[test]
     fn campo_nao_pii_fica_sem_tags() {
-        let (yaml, _) = aplicar(CONTRATO, &laudo().campos).unwrap();
+        let (yaml, _) = aplicar(CONTRATO, &laudo().campos, &BTreeSet::new()).unwrap();
         let d = declaracao_do_yaml(&yaml).unwrap();
         assert_eq!(
             d["data_cadastro"].classification.as_deref(),
@@ -1646,15 +1663,15 @@ classificacoes:
     /// O harness nao escreve "nao sei" no contrato.
     #[test]
     fn campo_sem_classificacao_nao_e_tocado() {
-        let (yaml, _) = aplicar(CONTRATO, &laudo().campos).unwrap();
+        let (yaml, _) = aplicar(CONTRATO, &laudo().campos, &BTreeSet::new()).unwrap();
         assert!(declaracao_do_yaml(&yaml).unwrap()["segmento"].vazia());
     }
 
     /// Rodar F4 de novo nao pode gerar diff.
     #[test]
     fn enriquecimento_e_idempotente() {
-        let (uma, _) = aplicar(CONTRATO, &laudo().campos).unwrap();
-        let (duas, _) = aplicar(&uma, &laudo().campos).unwrap();
+        let (uma, _) = aplicar(CONTRATO, &laudo().campos, &BTreeSet::new()).unwrap();
+        let (duas, _) = aplicar(&uma, &laudo().campos, &BTreeSet::new()).unwrap();
         assert_eq!(uma, duas);
     }
 
@@ -1665,7 +1682,7 @@ classificacoes:
             "      - name: cpf\n        logicalType: string",
             "      - name: cpf\n        logicalType: string\n        tags:\n          - finance",
         );
-        let (enriquecido, _) = aplicar(&yaml, &laudo().campos).unwrap();
+        let (enriquecido, _) = aplicar(&yaml, &laudo().campos, &BTreeSet::new()).unwrap();
         assert!(enriquecido.contains("finance"));
         assert!(enriquecido.contains("pii"));
     }
@@ -1675,13 +1692,73 @@ classificacoes:
     #[test]
     fn campo_ausente_do_yaml_e_reportado() {
         let sem_cpf = CONTRATO.replace("      - name: cpf\n        logicalType: string\n", "");
-        let (_, nao_aplicados) = aplicar(&sem_cpf, &laudo().campos).unwrap();
+        let (_, nao_aplicados) = aplicar(&sem_cpf, &laudo().campos, &BTreeSet::new()).unwrap();
         assert_eq!(nao_aplicados, vec!["cpf".to_string()]);
     }
 
     #[test]
     fn contrato_quebrado_e_erro_e_nao_pass_silencioso() {
-        assert!(aplicar("::: nao sou yaml :::", &laudo().campos).is_err());
+        assert!(aplicar("::: nao sou yaml :::", &laudo().campos, &BTreeSet::new()).is_err());
+    }
+
+    // --- F6: a divergencia sobrevive ao enriquecimento -------------------------
+
+    /// O contrato declara uma coisa, o catalogo diz outra. Sobrescrever
+    /// resolveria a divergencia a favor do catalogo **sem ninguem ter
+    /// decidido** — e o `decisao.md` abre prometendo que nada contraditorio e
+    /// persistido sem um humano dizer sim.
+    #[test]
+    fn campo_em_reclassificacao_nao_e_sobrescrito() {
+        let l = laudo();
+        let alvo = l
+            .campos
+            .iter()
+            .find(|c| c.situacao == Situacao::Classificado)
+            .expect("o laudo de teste classifica algum campo")
+            .campo
+            .clone();
+
+        let preservar: BTreeSet<String> = [alvo.clone()].into_iter().collect();
+        let (com, _) = aplicar(CONTRATO, &l.campos, &preservar).unwrap();
+        let (sem, _) = aplicar(CONTRATO, &l.campos, &BTreeSet::new()).unwrap();
+        assert_ne!(
+            com, sem,
+            "preservar `{alvo}` tinha de mudar o enriquecimento"
+        );
+
+        // O que ficou e exatamente o que o contrato ja declarava.
+        let antes = declaracao_do_yaml(CONTRATO).unwrap();
+        let depois = declaracao_do_yaml(&com).unwrap();
+        assert_eq!(
+            antes.get(&alvo).map(|m| m.classification.clone()),
+            depois.get(&alvo).map(|m| m.classification.clone()),
+            "`{alvo}` foi alterado apesar de estar em reclassificacao"
+        );
+    }
+
+    /// Preservar um campo nao pode respingar nos outros: quem concorda com o
+    /// catalogo continua sendo escrito.
+    #[test]
+    fn preservar_um_campo_nao_impede_os_demais() {
+        let l = laudo();
+        let classificados: Vec<String> = l
+            .campos
+            .iter()
+            .filter(|c| c.situacao == Situacao::Classificado)
+            .map(|c| c.campo.clone())
+            .collect();
+        assert!(classificados.len() >= 2, "o teste precisa de dois campos");
+
+        let preservar: BTreeSet<String> = [classificados[0].clone()].into_iter().collect();
+        let (yaml, _) = aplicar(CONTRATO, &l.campos, &preservar).unwrap();
+        let depois = declaracao_do_yaml(&yaml).unwrap();
+        assert!(
+            depois
+                .get(&classificados[1])
+                .is_some_and(|m| m.classification.is_some()),
+            "`{}` deveria ter sido classificado normalmente",
+            classificados[1]
+        );
     }
 
     // --- Determinismo do artefato ---------------------------------------------

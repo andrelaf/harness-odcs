@@ -1,0 +1,75 @@
+# O gate humano — a decisao que a esteira nao pode tomar.
+#
+# ATENCAO: este workflow e uma **simulacao** do controle real, montada para
+# exercitar o mecanismo numa conta pessoal, onde o GitHub nao deixa ninguem
+# aprovar o proprio pull request e times de organizacao nao existem.
+#
+#   simulacao  →  alguem com escrita aplica o rotulo `governanca-aprovada`
+#   real       →  quem o CODEOWNERS nomeia aprova a revisao do pull request
+#
+# O que a simulacao preserva: um ato humano **deliberado, distinto e
+# registrado**, que o CI verifica e nao pode praticar. O que ela nao prova:
+# segregacao de papeis — voce aplicando o proprio rotulo e auto-aprovacao. Isso
+# so vem de CODEOWNERS com times reais, ou de grupos do Entra ID no Azure
+# DevOps.
+#
+# Como adaptar para o cenario real: trocar a condicao do passo `decisao`. O
+# bloco esta marcado com REAL abaixo, e o resto do desenho nao se move.
+
+name: gate
+
+# `labeled` e `unlabeled` sao o que fazem aplicar o rotulo **redisparar** a
+# verificacao. Sem eles, o status ficaria congelado no que era verdade quando o
+# pull request abriu, e o rotulo nao destravaria nada.
+#
+# Workflow separado do `contrato` de proposito: aquele roda containers, e
+# redispara-lo a cada mudanca de rotulo custaria uma verificacao inteira por
+# clique. Este le uma etiqueta e responde em segundos.
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, reopened, synchronize, labeled, unlabeled]
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  decisao:
+    runs-on: ubuntu-latest
+    steps:
+      - name: decisao humana registrada
+        env:
+          ROTULO: governanca-aprovada
+          # SIMULACAO: os rotulos vem do evento. Como `labeled` esta nos types,
+          # o evento e sempre recente.
+          ROTULOS: ${{ join(github.event.pull_request.labels.*.name, ',') }}
+        run: |
+          # --- REAL: substituir este bloco por
+          #
+          #   decisao=$(gh pr view "$PR" --json reviewDecision -q .reviewDecision)
+          #   [ "$decisao" = "APPROVED" ] || { erro; exit 1; }
+          #
+          # com `pull-requests: read` e `GH_TOKEN` no ambiente. A branch
+          # protection exigindo revisao de CODEOWNER ja faria isso sozinha — este
+          # job existe para que o **status check** tambem reflita a decisao, e
+          # nao so o botao de merge.
+          case ",$ROTULOS," in
+            *",$ROTULO,"*)
+              echo "::notice::decisao humana registrada — rotulo \`$ROTULO\` aplicado"
+              exit 0
+              ;;
+          esac
+
+          echo "::error::aguardando decisao humana"
+          echo
+          echo "Este pull request altera contrato de dados e precisa de uma decisao"
+          echo "registrada antes do merge."
+          echo
+          echo "  1. leia o laudo no comentario da esteira, campo a campo"
+          echo "  2. confira as lacunas: elas seguem sem classificacao no contrato"
+          echo "  3. aplique o rotulo \`$ROTULO\`"
+          echo
+          echo "No cenario real este passo e a aprovacao de quem o CODEOWNERS"
+          echo "nomeia — ver .github/README.md no repositorio do harness."
+          exit 1

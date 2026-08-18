@@ -21,6 +21,7 @@ pub mod f2_mapear;
 pub mod f3_classificar;
 pub mod f4_gate;
 pub mod f5_aninhado;
+pub mod f6_divergencia;
 
 use crate::flow::{Outcome, Phase};
 use crate::phases::Run;
@@ -39,6 +40,8 @@ pub fn dispatch(run: &mut Run, phase: Phase) -> Option<Outcome> {
         ("f4-gate", Phase::Verify) => Some(f4_gate::verify(run)),
         ("f5-aninhado", Phase::Implement) => Some(f5_aninhado::implement(run)),
         ("f5-aninhado", Phase::Verify) => Some(f5_aninhado::verify(run)),
+        ("f6-divergencia", Phase::Implement) => Some(f6_divergencia::implement(run)),
+        ("f6-divergencia", Phase::Verify) => Some(f6_divergencia::verify(run)),
         _ => None,
     }
 }
