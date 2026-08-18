@@ -42,8 +42,21 @@ já está aberto. Provavelmente a mais útil das três.
 certo, com `id` batendo com o diretório, já passando na convenção de nome. Hoje as
 regras se descobrem errando.
 
-**`harness sugerir`** — para cada campo sem termo, mostrar os termos parecidos.
-Transforma "lacuna" em "você quis dizer `contato.telefone`?".
+**`sugerir` — no plugin, não no binário.** Mostrar os termos parecidos para um
+campo sem correspondência é útil, e é a única das três que **não** deve morar
+aqui: aproximação é palpite, e o binário tem a promessa de nunca resolver
+ambiguidade sozinho. Heurística de similaridade dentro dele contradiz o
+`docs/decisao.md` inteiro.
+
+No plugin é honesto — sugestão de assistente, que a pessoa aceita ou descarta, e
+que o `check` valida depois. Ele consome `harness termos --json` e faz a parte de
+linguagem em cima disso, sem reimplementar o casamento.
+
+**O teste que decide onde uma capacidade mora:** se duas implementações pudessem
+discordar sobre a mesma pergunta, ela é do binário. `termos` responde "este nome
+casa?" — a mesma pergunta do `check`, e admite uma resposta só. `sugerir`
+responde "o que você provavelmente quis dizer?" — pergunta que o `check` nunca
+faz.
 
 **Plugin de editor — em repositório próprio, e não aqui.** A separação não é de
 escopo, é de natureza: este projeto promete determinismo, e um plugin com modelo
