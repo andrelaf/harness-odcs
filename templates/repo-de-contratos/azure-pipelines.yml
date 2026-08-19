@@ -72,13 +72,14 @@ steps:
 
   # --- 3. A verificacao --------------------------------------------------
   #
-  # DIVERGE: `--formato github` emite anotacoes que so o GitHub entende. Aqui
-  # vale `--formato texto` ate existir um `--formato azure` que emita
-  # `##vso[task.logissue ...]` — ver docs/distribuicao.md.
+  # `--formato azure` emite `##vso[task.logissue ...]`, que prende a anotacao ao
+  # arquivo em vez de deixa-la no log do job. E o irmao de `--formato github`, e
+  # a unica diferenca entre as duas plataformas: a politica, o veredito e o
+  # `report.json` sao os mesmos.
   - script: |
       set +e
       "$(Agent.TempDirectory)/harness-odcs/harness.sh" check \
-        --formato texto --saida "$(Agent.TempDirectory)/report.json"
+        --formato azure --saida "$(Agent.TempDirectory)/report.json"
       echo "##vso[task.setvariable variable=codigo]$?"
     displayName: verificar contrato
 
@@ -104,7 +105,7 @@ steps:
       # O push nao dispara um pipeline novo em nenhuma das duas plataformas —
       # entao a verificacao do que acabou de ser escrito acontece aqui mesmo.
       "$(Agent.TempDirectory)/harness-odcs/harness.sh" check \
-        --formato texto --saida "$(Agent.TempDirectory)/report.json" || true
+        --formato azure --saida "$(Agent.TempDirectory)/report.json" || true
     displayName: emitir o laudo
     condition: succeeded()
 

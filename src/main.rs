@@ -163,6 +163,9 @@ enum Formato {
     Json,
     Github,
     Markdown,
+    /// Anotacoes do Azure DevOps. A politica e a mesma dos outros quatro: muda
+    /// so quem le.
+    Azure,
 }
 
 /// `check` — verificacao efemera, sem escrita fora de `evidence/` e `trace/`.
@@ -235,6 +238,7 @@ fn desenhar(cfg: &Config, r: &check::Relatorio, formato: Formato) -> Result<()> 
         Formato::Json => println!("{}", serde_json::to_string_pretty(r)?),
         Formato::Texto => check::imprimir(r),
         Formato::Github => print!("{}", check::github(r)),
+        Formato::Azure => print!("{}", check::azure(r)),
         Formato::Markdown => {
             // O laudo entra no corpo do comentario, e nao so como link: e ele
             // que o revisor precisa ler antes de aprovar.

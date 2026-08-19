@@ -799,6 +799,63 @@ pub fn github(r: &Relatorio) -> String {
     s
 }
 
+/// Anotacoes do Azure DevOps — irma de `github()`, e a **unica** coisa que muda
+/// entre as duas plataformas.
+///
+/// A politica esta em `montar`, o veredito no exit code e a decisao no
+/// `report.json`. O que cada CI sabe fazer e desenhar, e por isso portar custa
+/// uma funcao deste tamanho em vez de um projeto.
+///
+/// `##vso[task.logissue]` e o equivalente de `::error` — prende a mensagem ao
+/// arquivo, no lugar de deixa-la so no log do job, que ninguem abre.
+pub fn azure(r: &Relatorio) -> String {
+    let mut s = String::new();
+    for d in &r.defeitos {
+        s.push_str(&format!(
+            "##vso[task.logissue type=error;sourcepath={}]contrato: {} — {}
+",
+            escapar_azure_prop(&d.arquivo),
+            escapar_azure_msg(&d.etapa),
+            escapar_azure_msg(&d.mensagem)
+        ));
+    }
+    for a in &r.avisos {
+        s.push_str(&format!(
+            "##vso[task.logissue type=warning;sourcepath={}]convencao — {}
+",
+            escapar_azure_prop(&r.contrato),
+            escapar_azure_msg(a)
+        ));
+    }
+    for i in &r.gate {
+        s.push_str(&format!(
+            "##vso[task.logissue type=warning;sourcepath={}]aguarda decisao humana — {}
+",
+            escapar_azure_prop(&r.contrato),
+            escapar_azure_msg(&i.linha())
+        ));
+    }
+    s
+}
+
+/// O escape do Azure DevOps, que **nao** e o do GitHub — e sao **dois**.
+///
+/// O parser corta a estrutura no primeiro `]` depois de `##vso[`. Entao `;` e
+/// `]` so precisam sair das **propriedades**; na mensagem, que vem depois do
+/// fecha-colchetes, sao caracteres comuns. Escapar os dois lugares igual produz
+/// `[lacuna%5D` no texto que a pessoa le — feio, e por nada.
+///
+/// `%` usa a sequencia propria `%AZP25`, e nao `%25` como no GitHub.
+fn escapar_azure_prop(s: &str) -> String {
+    escapar_azure_msg(s).replace(';', "%3B").replace(']', "%5D")
+}
+
+fn escapar_azure_msg(s: &str) -> String {
+    s.replace('%', "%AZP25")
+        .replace('\r', "%0D")
+        .replace('\n', "%0A")
+}
+
 /// O corpo do comentario do pull request. Recebe o laudo pronto porque e ele
 /// que o revisor tem de ler — deixa-lo so como artefato faria a aprovacao
 /// acontecer sem ninguem abrir o documento.
@@ -983,6 +1040,36 @@ mod tests {
         let s = github(&r);
         assert!(s.starts_with("::error file=contracts/clientes/contract.odcs.yaml,"));
         assert!(s.contains("title=contrato: lint::logicalType invalido"));
+    }
+
+    /// O escape do Azure e de **dois** tipos, e trocar um pelo outro quebra em
+    /// silencio: `;` na propriedade corta a estrutura no meio; `]` na mensagem,
+    /// escapado a toa, aparece como `%5D` para quem le.
+    #[test]
+    fn azure_escapa_propriedade_e_mensagem_de_formas_diferentes() {
+        assert_eq!(escapar_azure_prop("a;b]c"), "a%3Bb%5Dc");
+        assert_eq!(escapar_azure_msg("a;b]c"), "a;b]c");
+        // `%` tem sequencia propria no Azure — `%25` do GitHub nao serve.
+        assert_eq!(escapar_azure_msg("100%"), "100%AZP25");
+    }
+
+    /// A anotacao tem de prender no arquivo, como no GitHub — a diferenca esta
+    /// so na sintaxe que cada plataforma entende.
+    #[test]
+    fn azure_prende_a_anotacao_no_arquivo() {
+        let mut r = base(Veredito::Fail);
+        r.defeitos.push(Defeito {
+            etapa: "lint".to_string(),
+            arquivo: "contracts/clientes/contract.odcs.yaml".to_string(),
+            mensagem: "logicalType invalido".to_string(),
+        });
+        let s = azure(&r);
+        assert!(s.starts_with("##vso[task.logissue type=error;"), "{s}");
+        assert!(
+            s.contains("sourcepath=contracts/clientes/contract.odcs.yaml]"),
+            "{s}"
+        );
+        assert!(s.contains("logicalType invalido"), "{s}");
     }
 
     /// Quebra de linha nao codificada trunca a anotacao na primeira linha.
