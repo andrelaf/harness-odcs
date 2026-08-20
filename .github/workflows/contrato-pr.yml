@@ -108,7 +108,11 @@ jobs:
         id: alvos
         run: |
           git fetch --quiet origin "${{ github.base_ref }}"
-          alterados=$(git diff --name-only \
+          # `--diff-filter=d` exclui o que foi **removido**. Sem ele, um pull
+          # request que apaga um contrato coloca o caminho apagado na lista, o
+          # `check` reprova com "contrato nao existe" (exit 4) e o job fica
+          # vermelho por ter feito exatamente o que foi pedido.
+          alterados=$(git diff --name-only --diff-filter=d \
             "origin/${{ github.base_ref }}...HEAD" \
             -- 'contracts/**/contract.odcs.yaml' || true)
 
@@ -189,8 +193,34 @@ jobs:
             echo "sem corpo para comentar — a verificacao nao chegou a rodar"
             exit 0
           }
-          gh pr comment "$PR" --body-file "$RUNNER_TEMP/comentario.md" --edit-last \
-            || gh pr comment "$PR" --body-file "$RUNNER_TEMP/comentario.md"
+
+          # O comentario do GitHub aceita 65536 caracteres, e um contrato ocupa
+          # ~5 KB (mais, quando ha lacuna e o vocabulario entra). Passar do
+          # limite nao trunca: a API recusa, e o pull request fica **sem
+          # comentario nenhum** — o pior desfecho possivel, porque some
+          # justamente no pull request grande, que e o que mais precisa dele.
+          #
+          # O resumo do job nao tem esse teto, e a evidencia inteira esta no
+          # artefato. Truncar aqui e apontar para la mantem o comentario util
+          # sem competir com eles.
+          LIMITE=60000
+          corpo="$RUNNER_TEMP/corpo.md"
+          if [ "$(wc -c < "$RUNNER_TEMP/comentario.md")" -gt "$LIMITE" ]; then
+            head -c "$LIMITE" "$RUNNER_TEMP/comentario.md" > "$corpo"
+            {
+              echo
+              echo '---'
+              echo
+              echo '**Comentario truncado** — este pull request toca contratos demais para'
+              echo 'caber no limite de 65536 caracteres. O relatorio completo esta no'
+              echo '**resumo do job** e no artefato `contrato-'"$GITHUB_RUN_ID"'`.'
+            } >> "$corpo"
+          else
+            cp "$RUNNER_TEMP/comentario.md" "$corpo"
+          fi
+
+          gh pr comment "$PR" --body-file "$corpo" --edit-last \
+            || gh pr comment "$PR" --body-file "$corpo"
 
       # O contrato enriquecido e o laudo propostos, mais o rastro do run. Nao
       # sao commitados aqui: sao a materia-prima da sugestao que quem abriu o PR

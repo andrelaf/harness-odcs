@@ -194,7 +194,7 @@ jobs:
         id: alvos
         run: |
           git fetch --quiet origin "${{ github.base_ref }}"
-          alterados=$(git diff --name-only             "origin/${{ github.base_ref }}...HEAD"             -- 'contracts/**/contract.odcs.yaml' || true)
+          alterados=$(git diff --name-only --diff-filter=d             "origin/${{ github.base_ref }}...HEAD"             -- 'contracts/**/contract.odcs.yaml' || true)
 
           # Mudanca so no workflow ou no pin: o alvo passa a ser **todo**
           # contrato, porque o criterio que os julga pode ter mudado.
@@ -304,7 +304,32 @@ jobs:
           PR: ${{ github.event.pull_request.number }}
         run: |
           [ -s "$RUNNER_TEMP/comentario.md" ] || { echo "nada a comentar"; exit 0; }
-          gh pr comment "$PR" --body-file "$RUNNER_TEMP/comentario.md" --edit-last             || gh pr comment "$PR" --body-file "$RUNNER_TEMP/comentario.md"
+
+          # O comentario do GitHub aceita 65536 caracteres, e cada contrato
+          # ocupa ~5 KB — mais quando ha lacuna e o vocabulario entra. Passar do
+          # limite nao trunca: a API recusa, e o pull request fica **sem
+          # comentario nenhum**. O desfecho pior aparece justamente no pull
+          # request grande, que e o que mais precisa do comentario.
+          #
+          # Num repositorio com dezenas de contratos isto deixa de ser hipotese:
+          # um bump de `HARNESS_VOCAB_VERSAO` faz o alvo virar **todos** eles.
+          LIMITE=60000
+          corpo="$RUNNER_TEMP/corpo.md"
+          if [ "$(wc -c < "$RUNNER_TEMP/comentario.md")" -gt "$LIMITE" ]; then
+            head -c "$LIMITE" "$RUNNER_TEMP/comentario.md" > "$corpo"
+            {
+              echo
+              echo '---'
+              echo
+              echo '**Comentario truncado** — este pull request toca contratos demais para'
+              echo 'caber no limite de 65536 caracteres. O relatorio completo de cada'
+              echo 'contrato esta no artefato `evidencia-'"$GITHUB_RUN_ID"'`.'
+            } >> "$corpo"
+          else
+            cp "$RUNNER_TEMP/comentario.md" "$corpo"
+          fi
+
+          gh pr comment "$PR" --body-file "$corpo" --edit-last             || gh pr comment "$PR" --body-file "$corpo"
 
       # A saida bruta das ferramentas, para depurar uma execucao que reprovou.
       #
