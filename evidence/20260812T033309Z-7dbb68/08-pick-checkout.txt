@@ -1,5 +1,0 @@
-# comando: git checkout -b feat/f1-validar
-# --- stdout ---
-
-# --- stderr ---
-Switched to a new branch 'feat/f1-validar'

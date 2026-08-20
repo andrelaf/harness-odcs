@@ -137,8 +137,14 @@ AD desfaz sem que nenhuma tela pareça mal configurada.
   anterior em vez da `main`, e a `main` nunca recebeu nada. Funciona, mas o
   histórico não mostra quatro entregas independentes — mostra uma só, longa.
   Merge de volta ao fim de cada feature, desde F1.
-- **`evidence/` cresce sem política de retenção.** 14 execuções já deixaram
-  dezenas de arquivos. Precisa de expiração antes de virar problema.
+- **`evidence/` era versionada aqui, contra a própria regra.** O
+  [`artefatos.md`](artefatos.md) sempre a classificou como efêmera e o template
+  do repositório de contratos já a ignorava; só este repositório a commitava.
+  Chegou a 5,3 MB em 27 execuções — quinze vezes o `trace/`, que tem o dobro de
+  runs — e a limpeza era tarefa manual recorrente, com commit próprio no
+  histórico. Resolvido com uma linha de `.gitignore`, e não com um comando de
+  expiração: o que precisa sobreviver já é commitado ao lado do contrato.
+  **A lição não é sobre retenção, é sobre regra escrita e não aplicada.**
 - **O hash do gate cobre o texto do item.** Reescrever a frase de um `detalhe`
   invalida aprovações antigas. Falha fechada, que é o lado certo de errar, mas
   incomoda no uso.

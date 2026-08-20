@@ -12,9 +12,12 @@ Ordenado por consequência, não por esforço.
 
 > A extração recursiva saiu daqui — virou F5, e está em `docs/spec-f5-aninhado.md`.
 
-**Retenção de `evidence/`.** Cresce sem política. Dezenas de arquivos por dezenas
-de execuções, e nada expira. Precisa de limpeza antes de virar problema — já
-apontado em [`decisao.md`](docs/decisao.md).
+> **Retenção de `evidence/` saiu daqui — resolvida.** E não do jeito que este
+> item previa: não faltava política de expiração, faltava este repositório
+> obedecer a que já estava escrita. O `artefatos.md` sempre classificou a
+> evidência como efêmera e o template do repositório de contratos já a ignorava.
+> Uma linha de `.gitignore`, e não um comando `podar` — que teria custado código
+> novo para decidir "quantos dias?" no lugar de alguém.
 
 **Laudo com aprovação humana registrada no gate.** Hoje o hash do gate cobre o
 texto do item; reescrever a frase de um `detalhe` invalida aprovações antigas.

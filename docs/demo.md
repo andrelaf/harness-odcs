@@ -224,6 +224,12 @@ rm -f state/gate-pendente.json
 execuções da demo são evidência tão legítima quanto as outras. Só o cursor de
 estado volta ao lugar.
 
+A diferença entre os dois é o que o repositório guarda. `trace/` é versionado —
+é dele que a medição sai, e é o entregável que o brief nomeia. `evidence/` fica
+no disco e é ignorada pelo `.gitignore`, porque é regenerável a partir do
+contrato e do critério, ambos fixados por versão. Rodar a demo não deixa
+nenhum arquivo para commitar depois.
+
 ---
 
 ## Perguntas prováveis, e a resposta curta
