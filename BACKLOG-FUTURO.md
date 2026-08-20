@@ -8,6 +8,35 @@ Ordenado por consequência, não por esforço.
 
 ---
 
+## A linha de corte
+
+O escopo foi fechado em **2026-08-20**. O que entrou, entrou porque tinha
+consumidor no fluxo que existe de verdade — e o fluxo que existe de verdade é
+**só o pull request**: ninguém roda `preparar.sh` nem `verificar.sh` na própria
+máquina. Esse fato, e não uma estimativa de esforço, decidiu cada linha abaixo.
+
+**O que fechou:**
+
+| Entrega | O que resolveu |
+|---|---|
+| Vocabulário de 8 → 27 termos | as lacunas reais dos dois contratos, e a enumeração inteira do art. 5º, II — `sensivel` deixou de ser caminho sem dado |
+| Vocabulário com release e pin próprios | cadastrar um termo não exige mais publicar um binário |
+| `Ctx` separado de `Run` | o domínio parou de receber a máquina de estados |
+| Workspace `laudo` + `harness` | a fronteira produto/andaime passou a ser recusada pelo compilador, não afirmada em prosa |
+| `evidence/` fora do versionamento | este repositório passou a obedecer a regra que ele mesmo escreveu |
+| Vocabulário no comentário do PR | quem tem lacuna passou a ver o que existe, com os aliases |
+
+**O que ficou de fora, e é o resto deste arquivo.** Nada aqui está adiado por
+falta de tempo: cada item tem uma condição escrita que ainda não aconteceu, e a
+mais frequente delas é *"alguém precisar disso"*.
+
+**Uma coisa não é escopo e continua pendente:** publicar `v0.8.0` e
+`vocab-v1.1.0`. O `novo-repo-de-contratos.sh` reprova de propósito até existir
+um release `vocab-v*`, e repositório de contratos que já existe precisa do
+workflow novo mais as três linhas novas no `harness.lock`, no mesmo commit.
+
+---
+
 ## Corrige um limite conhecido
 
 > A extração recursiva saiu daqui — virou F5, e está em `docs/spec-f5-aninhado.md`.
@@ -19,17 +48,33 @@ Ordenado por consequência, não por esforço.
 > Uma linha de `.gitignore`, e não um comando `podar` — que teria custado código
 > novo para decidir "quantos dias?" no lugar de alguém.
 
-**Laudo com aprovação humana registrada no gate.** Hoje o hash do gate cobre o
-texto do item; reescrever a frase de um `detalhe` invalida aprovações antigas.
-Falha fechada, que é o lado certo de errar, mas incomoda no uso.
+**Laudo com aprovação humana registrada no gate.** O hash do gate cobre o texto
+do item; reescrever a frase de um `detalhe` invalida aprovações antigas. Falha
+fechada, que é o lado certo de errar.
+
+Ficou de fora pelo mesmo critério que derrubou `termos`: **só incomoda num fluxo
+que ninguém usa.** O `check` ignora `state/aprovacoes.json` de propósito — num
+pull request ele seria auto-aprovação, e quem tem autoridade sobre o gate é a
+revisão de CODEOWNER (`crates/laudo/src/check.rs:22-26`). O arquivo tem uma
+entrada, de quando o próprio harness foi construído. Enquanto o fluxo for só
+pull request, o incômodo não tem quem o sinta.
 
 ## Separa responsabilidades que hoje viajam juntas
 
-**Vocabulário em repositório próprio.** Glossário e catálogo viajam dentro do
-pacote, então adicionar um termo exige publicar uma versão nova do binário — um
-*data steward* não deveria precisar de um release de Rust para cadastrar
-`segmento`. `HARNESS_VOCAB` já é a variável que separa; falta o repositório, o
-dono e o segundo pin no pipeline. Ver [`docs/distribuicao.md`](docs/distribuicao.md).
+**Vocabulário em repositório próprio — falta a mudança de casa, e só ela.**
+
+A parte cara está feita: glossário e catálogo saíram do pacote do binário e
+ganharam versão, release (`vocab-v*`) e pin próprios no `harness.lock`.
+Cadastrar `segmento` já não exige publicar Rust, e o `CODEOWNERS` já dá revisor
+distinto para `/glossary/` e `/classification/`. Ver
+[`docs/distribuicao.md`](docs/distribuicao.md).
+
+O que falta não é código: **um dono do vocabulário que não seja o dono do
+binário.** Sem ele, um repositório separado só muda o endereço do problema — a
+mesma pessoa continua aprovando o contrato e o critério que o julga.
+
+No dia em que existir, muda **uma linha**: `HARNESS_VOCAB_REPO`. Os dois
+diretórios trocam de casa e nada mais no pipeline se move.
 
 ## Reduz atrito de quem escreve contrato — no pull request, que é onde ele está
 
@@ -65,18 +110,27 @@ Há uma dose a escolher: apontar para o glossário na versão fixada do
 Esta seção assumia que existe alguém com o pacote na máquina. **Não existe.** O
 uso real do repositório de contratos é só via pull request: ninguém roda
 `scripts/preparar.sh` nem `scripts/verificar.sh`, e o veredito chega pelo
-comentário. Os três itens abaixo reduzem atrito *antes* do pull request — num
-momento que, no fluxo de hoje, não tem ninguém.
+comentário. Os três primeiros itens abaixo reduzem atrito *antes* do pull
+request — num momento que, no fluxo de hoje, não tem ninguém.
 
 **A condição, escrita uma vez:** só valem a pena depois que alguém adotar a
 verificação local. E adotar custa mais do que parece — o release publica apenas
 `linux-x64` (um job em `.github/workflows/release.yml`), então quem escreve
 contrato em Windows ou macOS precisa de WSL, container ou Rust antes de começar.
 
+> **O plugin, no fim da seção, não está mais preso a essa condição.** Ele
+> precisa do vocabulário, e não do binário — e o vocabulário virou YAML com
+> release próprio, que baixa em qualquer sistema. O que o segura é outra coisa:
+> repositório próprio, e alguém que o queira.
+
 **`harness termos [--buscar cpf]`** — listar e buscar o vocabulário disponível.
 Passa no critério abaixo e continua sendo do binário; o que falta não é lugar, é
 usuário. Enquanto o fluxo for só pull request, quem precisa dessa informação a
-recebe pelo laudo, acima.
+recebe pelo comentário, acima — com `id`, nome e aliases.
+
+O que sobra dele, se alguém adotar a verificação local, é **buscar**: consultar
+antes de escrever, em vez de descobrir depois de abrir o pull request. É menos
+do que este item prometia quando foi escrito.
 
 **`harness novo --dominio clientes --contrato pedidos`** — esqueleto no caminho
 certo, com `id` batendo com o diretório. Além de bloqueado, está no lugar errado:
@@ -105,14 +159,23 @@ dentro não pode prometer isso. Juntá-los abriria a porta para alguém pedir ao
 modelo que "ajude a decidir" uma classificação — e a garantia que sustenta o
 laudo cairia junto.
 
-Há uma ordem obrigatória, e ela tem um degrau a mais do que parecia: o plugin só
-existe depois de `termos`, e `termos` só existe depois de alguém adotar a
-verificação local. O plugin precisa do pacote na máquina pelo mesmo motivo que
-ele — então herda a condição inteira, e não é a saída para o bloqueio acima. Sem
-`termos`, ele reimplementa o casamento com o glossário, e passam a existir duas
-implementações da mesma regra. Com ela, o plugin apenas orquestra — entende o
-pedido, redige o YAML, consulta o vocabulário, roda `check`, lê a lacuna. Nunca
-julga.
+**`termos` deixou de ser pré-requisito dele.** Este arquivo afirmava que o
+plugin só existe depois de `termos`, porque sem ele reimplementaria o casamento
+e passariam a existir duas implementações da mesma regra. A regra que dispensa
+isso é mais simples: **o plugin propõe, o `check` julga.**
+
+Sugestão errada custa uma ida e volta; veredito errado custa a confiança nos
+dois. Enquanto o plugin nunca disser "passou", ele pode ler o YAML do
+vocabulário e aproximar do jeito que quiser — aproximar já é palpite por
+natureza, e o `check` adjudica depois de qualquer forma. O que ele não pode é
+pronunciar veredito, e isso não depende de `termos` existir.
+
+O que o plugin precisa é do **vocabulário na máquina**, e essa parte ficou mais
+fácil: ele tem release próprio, é YAML e não é preso a plataforma como o
+binário — o mesmo tarball serve em Windows e macOS, sem Docker e sem Rust.
+
+Continua valendo o que o plugin faz: entende o pedido, redige o YAML, consulta o
+vocabulário, roda `check`, lê a lacuna. **Nunca julga.**
 
 ## Escala e operação
 
@@ -124,9 +187,14 @@ mudança que o número justifica — otimizar o Rust não paga.
 contrato, o que garante correspondência. Um portal daria URL para quem não usa
 git — mas gerado a partir do commit, nunca commitado em duplicidade.
 
-**Assinatura do pacote.** Hoje há sha256, que basta contra tag movida e não
+**Assinatura dos pacotes.** Hoje há sha256, que basta contra tag movida e não
 contra release forjado por quem tenha escrita no repositório. Só faz sentido com
 mais de um consumidor.
+
+Agora são **dois** pacotes, e a prioridade entre eles não é óbvia: o do binário
+é maior e mais visível, mas quem carrega o critério é o do vocabulário — um
+catálogo forjado reclassifica campo em todo contrato que o use, sem que nenhuma
+linha de contrato mude. Se um dia só um for assinado, é esse.
 
 ## Descartado, e por quê
 

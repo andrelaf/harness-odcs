@@ -241,4 +241,4 @@ nenhum arquivo para commitar depois.
 | *"Por que não usar um LLM para classificar?"* | Classificaria mais rápido e perderia cobertura verificável, justificativa por decisão e controle do que é persistido. Se essas garantias não forem requisito, um LLM é a escolha certa e isto é caro demais. |
 | *"Isso escala?"* | Até a partida do container. 530 ms × 11 invocações por run. Acima de algumas centenas de contratos, precisa de lote ou CLI de vida longa. |
 | *"O que acontece se o agente esquecer um campo?"* | Não é possível esquecer sem reprovar: `verify` confere que cada campo do contrato aparece exatamente uma vez, e campo a mais ou a menos é FAIL. |
-| *"Por que Rust?"* | Porque a política precisa ser um binário único, testável sem disco nem container, e igual nas duas IDEs. `tests/flow.rs` enumera a tabela de transições inteira sem I/O. |
+| *"Por que Rust?"* | Porque a política precisa ser um binário único, testável sem disco nem container, e igual nas duas IDEs. `crates/harness/tests/flow.rs` enumera a tabela de transições inteira sem I/O. |

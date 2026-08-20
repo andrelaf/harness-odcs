@@ -134,7 +134,7 @@ pub enum HaltReason {
 }
 ```
 
-Ser pura não é preciosismo: é o que permite a `tests/flow.rs` enumerar a tabela inteira sem disco, sem Docker e sem git. "Determinismo testável" (critério da Semana 3) depende disso.
+Ser pura não é preciosismo: é o que permite a `crates/harness/tests/flow.rs` enumerar a tabela inteira sem disco, sem Docker e sem git. "Determinismo testável" (critério da Semana 3) depende disso.
 
 ### Tabela de decisão
 

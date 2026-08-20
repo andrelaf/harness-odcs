@@ -30,7 +30,7 @@ O [`docs/brief.md`](brief.md) fecha com um checklist. Onde cada item está hoje:
 
 | Critério | Como este projeto responde |
 |---|---|
-| **Determinismo** | Ordem de fases explícita em `flow.rs`, teto de passos que **aborta** com exit `3`, e uma tabela de transições exercitada em `tests/flow.rs` (11 testes só disso). Um `FAIL` para no passo em que ocorreu — não tenta a próxima fase. |
+| **Determinismo** | Ordem de fases explícita em `flow.rs`, teto de passos que **aborta** com exit `3`, e uma tabela de transições exercitada em `crates/harness/tests/flow.rs` (11 testes só disso). Um `FAIL` para no passo em que ocorreu — não tenta a próxima fase. |
 | **Portabilidade** | A política vive em `run.sh` + binário compilado. Nada em `.cursorrules`, tasks de IDE ou config de editor. Prova adicional que o brief não pedia: a mesma política atravessou **GitHub Actions e um repositório separado**, sem reescrever regra. |
 | **Verificação** | Nenhuma feature fecha sem `verify` PASS. Além disso, cada execução deixa `evidence/<run_id>/` com a saída bruta de toda ferramenta externa. |
 | **Medição** | `./run.sh metrics` deriva de `trace/` — não há contador paralelo. 14 runs medidos: 81,5 s somados, **99,6% em espera de container**. A leitura honesta está em `decisao.md`. |
@@ -46,8 +46,10 @@ que tudo o que sobrar vá para esse arquivo. O escopo *foi* congelado na prátic
 — as 4 features não cresceram —, mas o arquivo que registra o que ficou de fora
 só foi escrito depois. Está em [`BACKLOG-FUTURO.md`](../BACKLOG-FUTURO.md), e
 desde então passou a ser onde as decisões de escopo são discutidas: é lá que
-`sugerir` foi separado de `termos`, e onde ficou registrado que a seção de
-atrito inteira espera um loop local que ninguém adotou.
+`sugerir` foi separado de `termos`, que a linha de corte do escopo está
+registrada, e que cada item recusado carrega **a condição que o desbloquearia**
+em vez de uma estimativa de esforço. A mais frequente delas é *"alguém precisar
+disso"*.
 
 **`docs/portabilidade.md`.** A Semana 2 pede prova registrada de que o mesmo
 fluxo roda nas duas IDEs — o critério que o brief chama de "o grande item da

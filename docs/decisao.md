@@ -146,8 +146,17 @@ AD desfaz sem que nenhuma tela pareça mal configurada.
   expiração: o que precisa sobreviver já é commitado ao lado do contrato.
   **A lição não é sobre retenção, é sobre regra escrita e não aplicada.**
 - **O hash do gate cobre o texto do item.** Reescrever a frase de um `detalhe`
-  invalida aprovações antigas. Falha fechada, que é o lado certo de errar, mas
-  incomoda no uso.
+  invalida aprovações antigas. Falha fechada, que é o lado certo de errar.
+  Ficou como está por um motivo que só apareceu depois: o `check` **ignora**
+  `state/aprovacoes.json` de propósito — num pull request ele seria
+  auto-aprovação —, e o fluxo real é só pull request. O incômodo é de um loop
+  local que ninguém adotou.
+- **A fronteira entre produto e harness existiu em prosa antes de existir em
+  código.** Este documento e o [`curso.md`](curso.md) afirmavam que o `check`
+  não usava a máquina de estados; era verdade, e nada impedia a próxima linha de
+  passar a usar. Só virou estrutura — `crates/laudo` e `crates/harness`, com a
+  seta recusada pelo compilador — depois de o projeto estar pronto. **Teria
+  custado menos no começo, quando eram nove arquivos.**
 
 ## Recomendação
 

@@ -380,22 +380,31 @@ contratos, por [`docs/bootstrap-repo-contratos.md`](docs/bootstrap-repo-contrato
 run.sh                    ponto de entrada único
 .github/                  verificação em pull request — workflow, CODEOWNERS e o guia de setup
 scripts/                  ambiente, empacotamento e o gerador do repo de contratos
-src/                      o harness em Rust — fluxo, estado, trace, fases
-tests/                    tabela de transições: ordem, teto, halt
+crates/laudo/             o produto — contrato, glossário, catálogo, gate e laudo
+crates/harness/           o andaime — fases, transições, progresso, medição
+src/main.rs               o CLI, único lugar que importa dos dois
 contracts/<nome>/         um diretório por contrato — fonte, e destino do enriquecimento aprovado
 glossary/                 o glossário canônico contra o qual os campos são lidos
 classification/           o catálogo LGPD, chaveado por termo do glossário
 state/                    feature-list.json, progress.json, gate-pendente.json, aprovacoes.json
 trace/                    <run_id>.jsonl, append-only
 metrics/                  metrics.jsonl — derivado de trace/, regenerável
-evidence/                 saída bruta das ferramentas — runs representativos, não todos
+evidence/                 saída bruta das ferramentas — local, fora do versionamento
 docs/                     brief, contexto, specs, processo, laudo, cobertura, decisão e demo
 templates/                o repositório de contratos inteiro, pronto para materializar
 ```
 
-`evidence/` guarda **runs representativos**, não os 39 que existiram: a evidência
-é regenerável a partir do contrato e do critério, e 445 arquivos de saída bruta
-afogavam os 19 do produto. O `trace/` ficou inteiro — é dele que a medição é
-derivada, e apagá-lo tornaria os números da [Medição](#medição) não verificáveis.
+**`evidence/` não é versionada.** Ela é regenerável a partir do contrato e do
+critério — os dois fixados por versão —, e o
+[`docs/artefatos.md`](docs/artefatos.md) sempre a classificou como efêmera. Ela
+existe no disco de quem executa e sobe como artefato de job no pipeline, com
+retenção de 30 dias. O `trace/` ficou inteiro: é dele que a medição é derivada, e
+apagá-lo tornaria os números da [Medição](#medição) não verificáveis.
+
+Os **dois crates** respondem, na estrutura, à pergunta que o
+[`docs/curso.md`](docs/curso.md) responde em prosa: `crates/laudo` é o produto e
+`crates/harness` é o andaime que o construiu. A dependência aponta
+`harness → laudo` e nunca o contrário — `laudo` não declara `harness`, então um
+`use harness::` lá dentro não compila.
 
 O histórico do Git preserva o que foi podado.
