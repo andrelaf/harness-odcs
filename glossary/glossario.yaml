@@ -6,9 +6,10 @@
 # sobre o nome normalizado do campo, e variacao de grafia se resolve
 # declarando o alias, nunca adivinhando.
 
-version: 1.0.0
+version: 1.1.0
 
 termos:
+  # --- Pessoa natural: quem o dado descreve --------------------------------
   - id: pessoa.identificador_interno
     nome: Identificador interno de pessoa
     definicao: >-
@@ -30,11 +31,30 @@ termos:
       11 digitos.
     aliases: [cpf, num_cpf, nr_cpf, documento_cpf]
 
+  - id: pessoa.rg
+    nome: RG
+    definicao: >-
+      Numero do Registro Geral emitido por orgao de identificacao estadual.
+      Diferente do CPF, nao e unico no pais: a mesma pessoa pode ter RG
+      emitido em mais de uma unidade da federacao.
+    aliases: [rg, num_rg, nr_rg, documento_rg, registro_geral]
+
+  - id: pessoa.nome_mae
+    nome: Nome da mae
+    definicao: >-
+      Nome civil completo da mae da pessoa natural. Dado de filiacao, usado
+      no pais como fator de verificacao de identidade.
+    aliases: [nome_mae, nome_da_mae, filiacao_materna]
+
+  # O alias `data_nascimento_recebedor` existe porque o termo descreve o
+  # significado, nao o papel de quem aparece na linha: a data de nascimento de
+  # quem recebe a entrega e a mesma coisa que a de quem compra.
   - id: pessoa.data_nascimento
     nome: Data de nascimento
     definicao: Data em que a pessoa natural nasceu.
-    aliases: [data_nascimento, dt_nascimento, nascimento]
+    aliases: [data_nascimento, dt_nascimento, nascimento, data_nascimento_recebedor]
 
+  # --- Contato --------------------------------------------------------------
   - id: contato.email
     nome: Endereco de e-mail
     definicao: >-
@@ -49,14 +69,134 @@ termos:
     definicao: Numero de telefone usado para contato com a pessoa.
     aliases: [telefone, fone, celular, telefone_contato]
 
+  - id: contato.ip
+    nome: Endereco IP
+    definicao: >-
+      Endereco de protocolo de internet a partir do qual a pessoa acessou um
+      servico da organizacao.
+    aliases: [ip, endereco_ip, ip_origem]
+
+  # --- Localizacao ----------------------------------------------------------
   - id: endereco.cep
     nome: CEP
     definicao: Codigo de Enderecamento Postal brasileiro, 8 digitos.
     aliases: [cep, codigo_postal]
 
+  - id: endereco.logradouro
+    nome: Logradouro
+    definicao: >-
+      Nome da rua, avenida ou praca do endereco, com numero quando houver.
+      Chega ao domicilio — diferente do CEP, que chega a face de quadra.
+    aliases: [logradouro, endereco, rua]
+
+  - id: geo.coordenada
+    nome: Coordenada geografica
+    definicao: >-
+      Latitude ou longitude de um ponto associado a pessoa. Uma coordenada
+      isolada e um par incompleto, mas o par reconstroi a posicao exata.
+    aliases: [latitude, longitude, coordenada, geolocalizacao]
+
+  # --- Perfil: atributos que a organizacao atribui a pessoa -----------------
+  - id: perfil.segmento
+    nome: Segmento comercial
+    definicao: >-
+      Faixa comercial em que a organizacao classifica a pessoa. Nao vem da
+      pessoa: e atribuida a ela por criterio interno.
+    aliases: [segmento, segmento_cliente, segmento_comercial]
+
+  - id: perfil.valor_total_compras
+    nome: Valor total de compras
+    definicao: >-
+      Soma monetaria do que a pessoa comprou ate a data. Agregado que
+      descreve o comportamento de consumo dela, e nao uma transacao.
+    aliases: [valor_total_compras, total_compras, valor_compras]
+
+  # --- Dado pessoal sensivel — LGPD art. 5, II ------------------------------
+  # A enumeracao da lei, inteira. Nenhum destes tem campo correspondente nos
+  # contratos de hoje, e isso nao e defeito: o vocabulario existe antes do
+  # contrato que o consome. Classificar dado sensivel so no dia em que o
+  # primeiro campo aparecer seria decidir com pressa, sobre a categoria em que
+  # errar custa mais caro.
+  - id: perfil.origem_racial
+    nome: Origem racial ou etnica
+    definicao: Origem racial ou etnica declarada pela pessoa ou a ela atribuida.
+    aliases: [origem_racial, raca, etnia, cor_raca]
+
+  - id: perfil.conviccao_religiosa
+    nome: Conviccao religiosa
+    definicao: Religiao ou conviccao de fe declarada pela pessoa.
+    aliases: [religiao, conviccao_religiosa, credo]
+
+  - id: perfil.opiniao_politica
+    nome: Opiniao politica
+    definicao: >-
+      Posicao politica declarada pela pessoa, inclusive filiacao a partido.
+    aliases: [opiniao_politica, filiacao_partidaria, partido]
+
+  - id: perfil.filiacao_sindical
+    nome: Filiacao sindical
+    definicao: >-
+      Filiacao a sindicato ou a organizacao de carater religioso, filosofico
+      ou politico.
+    aliases: [filiacao_sindical, sindicato]
+
+  - id: saude.condicao
+    nome: Condicao de saude
+    definicao: >-
+      Diagnostico, condicao clinica ou qualquer dado referente a saude da
+      pessoa natural.
+    aliases: [condicao_saude, diagnostico, cid, estado_saude]
+
+  - id: saude.vida_sexual
+    nome: Vida sexual
+    definicao: Dado referente a vida sexual ou a orientacao sexual da pessoa.
+    aliases: [vida_sexual, orientacao_sexual]
+
+  - id: saude.dado_genetico
+    nome: Dado genetico
+    definicao: >-
+      Informacao sobre caracteristicas hereditarias da pessoa, obtida de
+      analise de material biologico.
+    aliases: [dado_genetico, genoma, perfil_genetico]
+
+  - id: biometria.template
+    nome: Template biometrico
+    definicao: >-
+      Representacao digital de caracteristica fisica ou comportamental usada
+      para identificar a pessoa — digital, face, iris ou voz.
+    aliases: [biometria, template_biometrico, digital, impressao_digital, face_template]
+
+  # --- Registro: descreve a linha, e nao a pessoa ---------------------------
   - id: cadastro.data_criacao
     nome: Data de criacao do cadastro
     definicao: >-
       Data em que o registro passou a existir na base da organizacao. Nao
       descreve a pessoa: descreve o cadastro.
     aliases: [data_cadastro, dt_cadastro, criado_em]
+
+  - id: registro.identificador_tecnico
+    nome: Identificador tecnico do registro
+    definicao: >-
+      Chave primaria atribuida pelo banco de dados a linha ou ao documento.
+      Identifica o registro dentro da colecao, e nao a pessoa descrita nele.
+    aliases: [_id, id_registro, identificador_tecnico]
+
+  - id: pedido.data
+    nome: Data do pedido
+    definicao: Data em que o pedido foi realizado.
+    aliases: [data_pedido, dt_pedido]
+
+  - id: pedido.valor_total
+    nome: Valor total do pedido
+    definicao: >-
+      Valor monetario de uma transacao. Descreve o pedido, e nao o
+      comportamento acumulado de quem o fez.
+    aliases: [valor_total, valor_pedido]
+
+  # --- Pessoa juridica ------------------------------------------------------
+  - id: organizacao.cnpj
+    nome: CNPJ
+    definicao: >-
+      Numero de inscricao no Cadastro Nacional da Pessoa Juridica, 14
+      digitos. Identifica pessoa juridica, e nao pessoa natural.
+    aliases: [cnpj, num_cnpj, nr_cnpj, documento_cnpj]

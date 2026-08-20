@@ -9,7 +9,7 @@
 # `cpf`, `nr_cpf` e `documento_cpf` receberem a mesma resposta: os tres casam
 # com `pessoa.cpf` em F2, e a classificacao mora no termo.
 
-version: 1.0.0
+version: 1.1.0
 
 classificacoes:
   - termo: pessoa.identificador_interno
@@ -44,6 +44,30 @@ classificacoes:
       qualquer outra base do pais.
     referencia: LGPD art. 5, I
 
+  # Mesma familia do CPF, e `restricted` pelo mesmo motivo — apesar de o RG
+  # nao ser unico no pais, o que o torna pior como chave e igualmente ruim
+  # como vazamento.
+  - termo: pessoa.rg
+    classification: restricted
+    pii: true
+    sensivel: false
+    justificativa: >-
+      Numero de documento oficial de identificacao. Identifica sozinho dentro
+      da unidade da federacao que o emitiu e nao muda ao longo da vida.
+    referencia: LGPD art. 5, I
+
+  # Acima do nome proprio, e a razao nao e a identificacao: e o uso que o pais
+  # faz do dado. Nome da mae e pergunta de verificacao em banco e telefonia,
+  # entao vazamento habilita fraude de identidade em vez de so identificar.
+  - termo: pessoa.nome_mae
+    classification: restricted
+    pii: true
+    sensivel: false
+    justificativa: >-
+      Dado de filiacao, empregado no pais como fator de verificacao de
+      identidade. Identifica a pessoa e, vazado, permite se passar por ela.
+    referencia: LGPD art. 5, I
+
   - termo: pessoa.data_nascimento
     classification: confidential
     pii: true
@@ -72,6 +96,17 @@ classificacoes:
       no cadastro da operadora.
     referencia: LGPD art. 5, I
 
+  - termo: contato.ip
+    classification: confidential
+    pii: true
+    sensivel: false
+    justificativa: >-
+      Endereco IP nao nomeia ninguem, mas identifica o terminal — e o provedor
+      e obrigado por lei a guardar os registros de conexao que ligam endereco,
+      instante e assinante. Dado pessoal por identificabilidade, nao por
+      conteudo.
+    referencia: LGPD art. 5, I c/c Lei 12.965/2014 art. 13
+
   - termo: endereco.cep
     classification: confidential
     pii: true
@@ -81,7 +116,133 @@ classificacoes:
       de logradouro e reidentifica quando combinado com data de nascimento.
     referencia: LGPD art. 5, I
 
-  # A unica entrada nao-PII do catalogo, e a que mais merece leitura.
+  - termo: endereco.logradouro
+    classification: confidential
+    pii: true
+    sensivel: false
+    justificativa: >-
+      Chega ao domicilio, e nao a face de quadra como o CEP. Com o nome, e
+      localizacao fisica da pessoa; sozinho, reidentifica em base pequena.
+    referencia: LGPD art. 5, I
+
+  - termo: geo.coordenada
+    classification: confidential
+    pii: true
+    sensivel: false
+    justificativa: >-
+      Uma coordenada isolada e um par incompleto, mas o par reconstroi a
+      posicao exata, e a serie historica revela residencia, trabalho e rotina
+      sem que nenhum campo precise nomear a pessoa.
+    referencia: LGPD art. 5, I
+
+  - termo: perfil.segmento
+    classification: confidential
+    pii: true
+    sensivel: false
+    justificativa: >-
+      Nao identifica sozinho e nao veio da pessoa: foi atribuido a ela. Ainda
+      assim e dado pessoal, porque qualifica a pessoa identificada na linha e
+      alimenta decisao comercial sobre ela.
+    referencia: LGPD art. 5, I
+
+  - termo: perfil.valor_total_compras
+    classification: confidential
+    pii: true
+    sensivel: false
+    justificativa: >-
+      Agregado de comportamento de consumo vinculado a pessoa. Nao identifica
+      sozinho, mas descreve a pessoa — diferente do valor de um pedido, que
+      descreve a transacao.
+    referencia: LGPD art. 5, I
+
+  # --- Dado pessoal sensivel — art. 5, II ----------------------------------
+  # Os oito sao `restricted` + `pii` + `sensivel` porque a lei os trata como
+  # categoria propria, com hipoteses de tratamento mais estreitas (art. 11) e
+  # nao apenas com risco maior. A regra de coerencia do README exige que
+  # `sensivel: true` venha com `pii: true` e `restricted` — nao ha grau aqui.
+  - termo: perfil.origem_racial
+    classification: restricted
+    pii: true
+    sensivel: true
+    justificativa: >-
+      Origem racial ou etnica esta na enumeracao de dado pessoal sensivel, e
+      seu tratamento e o vetor classico de discriminacao que a lei nomeia
+      como finalidade vedada.
+    referencia: LGPD art. 5, II c/c art. 11 e art. 6, IX
+
+  - termo: perfil.conviccao_religiosa
+    classification: restricted
+    pii: true
+    sensivel: true
+    justificativa: >-
+      Conviccao religiosa esta na enumeracao de dado pessoal sensivel.
+    referencia: LGPD art. 5, II c/c art. 11
+
+  - termo: perfil.opiniao_politica
+    classification: restricted
+    pii: true
+    sensivel: true
+    justificativa: >-
+      Opiniao politica esta na enumeracao de dado pessoal sensivel, inclusive
+      quando expressa como filiacao partidaria.
+    referencia: LGPD art. 5, II c/c art. 11
+
+  - termo: perfil.filiacao_sindical
+    classification: restricted
+    pii: true
+    sensivel: true
+    justificativa: >-
+      Filiacao a sindicato ou a organizacao de carater religioso, filosofico
+      ou politico esta na enumeracao de dado pessoal sensivel.
+    referencia: LGPD art. 5, II c/c art. 11
+
+  - termo: saude.condicao
+    classification: restricted
+    pii: true
+    sensivel: true
+    justificativa: >-
+      Dado referente a saude esta na enumeracao de dado pessoal sensivel.
+      Diagnostico e condicao clinica revelam a pessoa em dimensao que ela nao
+      escolhe e nao consegue desfazer.
+    referencia: LGPD art. 5, II c/c art. 11
+
+  - termo: saude.vida_sexual
+    classification: restricted
+    pii: true
+    sensivel: true
+    justificativa: >-
+      Dado referente a vida sexual esta na enumeracao de dado pessoal
+      sensivel.
+    referencia: LGPD art. 5, II c/c art. 11
+
+  - termo: saude.dado_genetico
+    classification: restricted
+    pii: true
+    sensivel: true
+    justificativa: >-
+      Dado genetico esta na enumeracao de dado pessoal sensivel. Alcanca
+      tambem os parentes da pessoa, que nao consentiram nada.
+    referencia: LGPD art. 5, II c/c art. 11
+
+  # A lei condiciona: dado biometrico e sensivel "quando vinculado a uma
+  # pessoa natural". Num contrato de dados o template esta numa linha que
+  # identifica alguem — a condicao esta satisfeita por construcao, e por isso
+  # o catalogo nao a trata como caso a caso.
+  - termo: biometria.template
+    classification: restricted
+    pii: true
+    sensivel: true
+    justificativa: >-
+      Dado biometrico esta na enumeracao de dado pessoal sensivel quando
+      vinculado a pessoa natural. Diferente de senha, nao pode ser trocado
+      depois de vazado.
+    referencia: LGPD art. 5, II c/c art. 11
+
+  # --- Nao descrevem a pessoa ----------------------------------------------
+  # A leitura que mais merece atencao do catalogo: descrever o registro nao e
+  # descrever quem esta nele. Numa linha ja identificada estes campos herdam o
+  # carater pessoal do conjunto — risco que se trata no nivel do dataset, e
+  # nao no do campo.
   - termo: cadastro.data_criacao
     classification: internal
     pii: false
@@ -92,3 +253,45 @@ classificacoes:
       identificada ela herda o carater pessoal do conjunto — risco que se
       trata no nivel do dataset, nao no do campo.
     referencia: LGPD art. 5, I — por exclusao
+
+  - termo: registro.identificador_tecnico
+    classification: internal
+    pii: false
+    sensivel: false
+    justificativa: >-
+      Chave primaria atribuida pelo banco. Identifica o registro dentro da
+      colecao e nao carrega significado fora dela — diferente do
+      identificador interno de pessoa, que existe para apontar para alguem.
+    referencia: LGPD art. 5, I — por exclusao
+
+  - termo: pedido.data
+    classification: internal
+    pii: false
+    sensivel: false
+    justificativa: >-
+      Descreve quando a transacao ocorreu, nao quem a fez.
+    referencia: LGPD art. 5, I — por exclusao
+
+  - termo: pedido.valor_total
+    classification: internal
+    pii: false
+    sensivel: false
+    justificativa: >-
+      Valor de uma transacao isolada descreve o pedido. O acumulado por
+      pessoa e outro termo, e classificado como dado pessoal.
+    referencia: LGPD art. 5, I — por exclusao
+
+  # `internal` e nao `public`, apesar de o CNPJ ser consultavel publicamente.
+  # O motivo e o MEI e o empresario individual: ali o CNPJ aponta para uma
+  # pessoa natural, e a mesma coluna passa a carregar dado pessoal sem que o
+  # schema mude. Classificar como publico exigiria saber a natureza juridica
+  # de cada linha, que um catalogo chaveado por termo nao tem como saber.
+  - termo: organizacao.cnpj
+    classification: internal
+    pii: false
+    sensivel: false
+    justificativa: >-
+      Identifica pessoa juridica, e a lei protege a pessoa natural. A ressalva
+      e o MEI e o empresario individual, em que o numero alcanca uma pessoa
+      natural — caso que deve ser declarado no contrato e resolvido no gate.
+    referencia: LGPD art. 1 e art. 5, I — por exclusao

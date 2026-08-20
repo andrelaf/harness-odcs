@@ -1,0 +1,40 @@
+{
+  "runId": "aac05209-5438-4a66-8c13-082452752e0a",
+  "datacontractCliVersion": "1.1.0",
+  "dataContractId": "pedidos",
+  "dataContractVersion": "1.0.0",
+  "dataProductId": null,
+  "outputPortId": null,
+  "server": null,
+  "filters": null,
+  "timestampStart": "2026-08-20T03:33:52.379720Z",
+  "timestampEnd": "2026-08-20T03:33:52.555032Z",
+  "result": "passed",
+  "checks": [
+    {
+      "id": null,
+      "key": null,
+      "category": null,
+      "type": "lint",
+      "name": "Data contract is syntactically valid",
+      "model": null,
+      "field": null,
+      "quality_id": null,
+      "tags": null,
+      "engine": "datacontract",
+      "language": null,
+      "implementation": null,
+      "result": "passed",
+      "reason": null,
+      "diagnostics": null,
+      "failed_samples": null
+    }
+  ],
+  "logs": [
+    {
+      "level": "INFO",
+      "message": "Linting data contract",
+      "timestamp": "2026-08-20T03:33:52.379757Z"
+    }
+  ]
+}
