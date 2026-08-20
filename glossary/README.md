@@ -28,7 +28,7 @@ termo só casa pelo próprio `id`.
 O nome do campo do contrato é **normalizado** e comparado com o conjunto de
 chaves do glossário. As chaves de um termo são o `id` normalizado **mais** cada
 alias normalizado. A normalização é `normalizar` em
-[`src/features/f2_mapear.rs`](../src/features/f2_mapear.rs), e faz três coisas,
+[`f2_mapear.rs`](../crates/laudo/src/features/f2_mapear.rs), e faz três coisas,
 nesta ordem:
 
 1. minúsculas;

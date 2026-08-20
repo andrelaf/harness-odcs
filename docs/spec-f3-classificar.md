@@ -176,5 +176,5 @@ em `cargo test`, sem subir container.
 
 ## Onde a implementação mora
 
-`src/features/f3_classificar.rs`, compilada, registrada em
-`features::dispatch`. Mesmo motivo de F1 e F2.
+`crates/laudo/src/features/f3_classificar.rs`, compilada, registrada em
+`harness::dispatch`. Mesmo motivo de F1 e F2.

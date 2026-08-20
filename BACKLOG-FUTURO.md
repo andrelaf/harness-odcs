@@ -32,7 +32,7 @@ dono e o segundo pin no pipeline. Ver [`docs/distribuicao.md`](docs/distribuicao
 
 **O laudo aponta o vocabulário disponível quando houver lacuna.** Hoje o item de
 gate diz `campo sem termo no glossario — segue sem classificacao`
-(`src/features/f4_gate.rs:1034`): nomeia a ausência e não diz nada sobre o
+(`crates/laudo/src/features/f4_gate.rs:1034`): nomeia a ausência e não diz nada sobre o
 vocabulário que existe. Quem lê o comentário descobre que errou e continua sem
 saber o que estava disponível.
 

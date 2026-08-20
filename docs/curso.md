@@ -87,8 +87,14 @@ otimizar o Rust não paga.
 
 **`state/progress.json` e a máquina de estados, depois que o domínio ficou
 pronto.** O `check` — que é o que o CI roda hoje, e o que o processo real usa —
-**não usa a máquina de estados**. Ele carrega o estado só porque a struct `Run`
-exige, e nunca o salva. Não avança feature, não conta passo, não fecha ciclo.
+**não usa a máquina de estados**. Não avança feature, não conta passo, não fecha
+ciclo.
+
+> Este parágrafo dizia, até a divisão em crates, que o `check` *"carrega o
+> estado só porque a struct `Run` exige, e nunca o salva"*. Era verdade, e era
+> uma observação de prosa sobre uma coisa que o código permitia. Hoje o `check`
+> monta um [`Ctx`](../crates/laudo/src/ctx.rs), que não tem onde guardar estado
+> de fluxo, e as duas leituras de disco sumiram por impossibilidade.
 
 Isso não foi acidente, foi necessidade: três pull requests abertos ao mesmo
 tempo disputariam `state/progress.json`, e cada execução de CI viraria um commit
@@ -119,6 +125,27 @@ a disciplina de evidência.
 Dito de outro jeito: o harness foi um bom **andaime**. O que ficou de pé depois
 que o andaime saiu foi o `check` — determinístico, sem estado, e chamável de
 qualquer lugar.
+
+**E isso deixou de ser uma leitura para virar a estrutura do repositório.** Onde
+havia um crate, há dois:
+
+```
+crates/laudo/     o produto — contrato, glossário, catálogo, gate, laudo
+crates/harness/   o andaime — fases, transições, progresso, medição
+src/main.rs       o CLI, único lugar que importa dos dois
+```
+
+A dependência aponta `harness → laudo`, e **nunca** o contrário — não por
+convenção: `laudo` não declara `harness` no `Cargo.toml`, então um `use
+harness::` lá dentro não compila. A frase "o produto não precisa do andaime"
+deixou de ser algo que este documento afirma e passou a ser algo que o
+compilador recusa.
+
+A costura entre os dois é um arquivo só,
+[`harness/src/dispatch.rs`](../crates/harness/src/dispatch.rs): dado
+`(feature, fase)`, qual função de domínio atende. É o único lugar do projeto que
+precisa saber as duas coisas ao mesmo tempo — e o tamanho dele, quarenta linhas,
+é a medida de quão pouco os dois lados realmente se tocam.
 
 Isso não invalida o exercício; explica onde ele se paga. Um harness com máquina
 de estados se paga enquanto há **trabalho sequencial a conduzir**. Quando o

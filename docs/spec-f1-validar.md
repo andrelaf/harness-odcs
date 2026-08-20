@@ -106,7 +106,7 @@ caminho de falha subindo container com contrato quebrado — caro e frágil.
 
 ## Onde a implementação mora
 
-`src/features/f1_validar.rs`, compilada, e não em `features/f1-validar/*.sh`.
+`crates/laudo/src/features/f1_validar.rs`, compilada, e não em `features/f1-validar/*.sh`.
 
 A spec do harness descreve o primeiro nível da resolução como
 `features/<feature-id>/<fase>` — o *slot* por feature, que aqui é a função

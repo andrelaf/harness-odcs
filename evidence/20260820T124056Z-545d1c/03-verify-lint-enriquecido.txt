@@ -1,0 +1,12 @@
+# comando: docker run --rm -v C:/repos/harness-odcs:/home/datacontract datacontract/cli:1.1.0 lint evidence/20260820T124056Z-545d1c/f4-contrato-enriquecido.odcs.yaml --output-format json --output evidence/20260820T124056Z-545d1c/f4-lint-enriquecido.json
+# --- stdout ---
+Written json test results to 
+evidence/20260820T124056Z-545d1c/f4-lint-enriquecido.json
+╭────────┬──────────────────────────────────────┬───────┬─────────╮
+│ Result │ Check                                │ Field │ Details │
+├────────┼──────────────────────────────────────┼───────┼─────────┤
+│ passed │ Data contract is syntactically valid │       │         │
+╰────────┴──────────────────────────────────────┴───────┴─────────╯
+🟢 data contract is valid. Run 1 checks. Took 0.149317 seconds.
+
+# --- stderr ---

@@ -79,7 +79,7 @@ entregas     [array, null]
 ```
 
 A informação está toda lá. A perda acontece na extração do harness, em
-[`src/features/contrato.rs`](../src/features/contrato.rs):
+[`crates/laudo/src/features/contrato.rs`](../crates/laudo/src/features/contrato.rs):
 
 ```rust
 Ok(schema

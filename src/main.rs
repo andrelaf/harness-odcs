@@ -6,20 +6,30 @@
 
 use anyhow::{Context, Result};
 use clap::{Parser, Subcommand};
-use harness::check;
+// Os dois lados, e o binario e o unico lugar que importa dos dois.
+//
+// Nao e acidente nem preguica de organizar: `check`, `aplicar` e `report` sao
+// comandos do produto; `plan`, `next`, `approve` e `reset` conduzem a
+// construcao. O CLI e onde as duas familias viram uma lista de subcomandos, e
+// so aqui.
+//
+// A lista abaixo tambem responde, sem prosa, a pergunta do `docs/curso.md`
+// sobre quanto do harness sobrou em uso: quatro dos nove comandos.
+use laudo::check;
+use laudo::config::Config;
+use laudo::ctx::Ctx;
+use laudo::exit::Exit;
+use laudo::features::contrato;
+use laudo::gate::{Aprovacao, Aprovacoes, GatePendente};
+use laudo::outcome::Outcome;
+use laudo::tools;
+use laudo::trace::{self, Draft, Tracer};
+
 use harness::checks;
-use harness::config::Config;
-use harness::ctx::Ctx;
-use harness::exit::Exit;
-use harness::features::contrato;
-use harness::flow::{self, HaltReason, Outcome, Phase, Transition};
+use harness::flow::{self, HaltReason, Phase, Transition};
 use harness::metrics;
 use harness::phases::{self, Run};
-use harness::state::{
-    self, Aprovacao, Aprovacoes, FeatureList, FeatureStatus, GatePendente, Progress, RunStatus,
-};
-use harness::tools;
-use harness::trace::{self, Draft, Tracer};
+use harness::state::{self, FeatureList, FeatureStatus, Progress, RunStatus};
 use std::fs;
 use std::path::Path;
 

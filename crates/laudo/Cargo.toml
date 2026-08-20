@@ -1,0 +1,31 @@
+# O produto: o que sobrou de pe quando o andaime saiu.
+#
+# Le o contrato ODCS, casa cada campo com o glossario, classifica pelo catalogo,
+# compoe o gate e emite o laudo. Deterministico, sem estado de fluxo, chamavel
+# de qualquer lugar — e o que o CI executa em todo pull request.
+#
+# **Nao depende de `harness`, e essa e a razao de este arquivo existir.** As
+# funcoes de dominio nunca precisaram da maquina de estados; enquanto os dois
+# moravam num crate so, nada impedia a primeira linha que passasse a precisar.
+[package]
+name = "laudo"
+version = "0.8.0"
+edition = "2024"
+rust-version = "1.95"
+description = "Classificacao de privacidade de contratos ODCS: casamento, catalogo, gate e laudo"
+publish = false
+
+[dependencies]
+serde.workspace = true
+serde_json.workspace = true
+anyhow.workspace = true
+# Timestamps ISO-8601 em UTC para o trace.
+time.workspace = true
+# Hash da evidencia. Precisa ser estavel entre versoes, o que exclui o
+# DefaultHasher da std (SipHash sem garantia de estabilidade).
+sha2.workspace = true
+# Glossario canonico (F2) em YAML. Fork mantido do serde_yaml, que o autor
+# arquivou em 2024 — a alternativa seria carregar o glossario em JSON, o que
+# transferiria o custo para quem edita o arquivo a mao. O harness nao parseia
+# ODCS com isto: quem interpreta contrato e o datacontract-cli.
+serde_norway.workspace = true

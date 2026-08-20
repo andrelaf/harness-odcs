@@ -52,8 +52,12 @@ jobs:
       # Um release que nao passa nos testes e um defeito distribuido por
       # versao fixada — pior que um defeito local, porque agora ele tem numero
       # e alguem vai fixa-lo de proposito.
+      # `--workspace` e obrigatorio: a raiz tambem e um pacote (o binario), e
+      # `cargo test` sem a flag roda so ele — zero testes, job verde, release
+      # publicado sem nenhuma prova. Falha silenciosa da familia que este
+      # projeto passa o tempo todo tentando evitar.
       - name: testes
-        run: cargo test --quiet
+        run: cargo test --workspace --quiet
 
       - name: montar o pacote
         run: ./scripts/package.sh "$RUNNER_TEMP/harness-odcs"
