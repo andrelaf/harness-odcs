@@ -25,7 +25,7 @@ use crate::features::f3_classificar::{
     self, CampoClassificado, Catalogo, Laudo, Situacao, niveis_legivel, sim_nao,
 };
 use crate::flow::Outcome;
-use crate::phases::Run;
+use crate::ctx::Ctx;
 use crate::state::{Aprovacoes, GatePendente, SCHEMA_VERSION};
 use crate::tools;
 use crate::trace;
@@ -57,31 +57,31 @@ const SEM_CLASSIFICACAO: &str = "sem classificacao";
 // --- Fases -------------------------------------------------------------------
 
 /// Propoe o enriquecimento e submete ao gate o que exigir decisao humana.
-pub fn implement(run: &mut Run) -> Outcome {
-    let c = match compor(run, "implement") {
+pub fn implement(ctx: &mut Ctx) -> Outcome {
+    let c = match compor(ctx, "implement") {
         Ok(c) => c,
         Err(e) => return Outcome::Fail(e),
     };
 
     // A evidencia e gravada **antes** da decisao do gate, de proposito: quem
     // aprova precisa poder ler a proposta inteira, nao so a lista de itens.
-    if let Err(e) = gravar_proposta(run, &c) {
+    if let Err(e) = gravar_proposta(ctx, &c) {
         return Outcome::Fail(e);
     }
 
     if c.proposta.gate.is_empty() {
-        run.note("nenhuma pendencia — nada a submeter ao gate".to_string());
+        ctx.note("nenhuma pendencia — nada a submeter ao gate".to_string());
         return Outcome::Pass;
     }
 
-    let aprovacoes = match Aprovacoes::load_or_default(&run.cfg.aprovacoes_path()) {
+    let aprovacoes = match Aprovacoes::load_or_default(&ctx.cfg.aprovacoes_path()) {
         Ok(a) => a,
         Err(e) => return Outcome::Fail(format!("lendo o livro de aprovacoes: {e:#}")),
     };
 
     match aprovacoes.cobrindo(FEATURE, &c.proposta.gate_sha256) {
         Some(a) => {
-            run.note(format!(
+            ctx.note(format!(
                 "gate liberado por decisao humana em {} — pedido {} ({})",
                 a.aprovado_em,
                 &a.gate_sha256[..16],
@@ -89,20 +89,20 @@ pub fn implement(run: &mut Run) -> Outcome {
             ));
             Outcome::Pass
         }
-        None => bloquear(run, &c.proposta),
+        None => bloquear(ctx, &c.proposta),
     }
 }
 
 /// Refaz tudo do zero, julga, e so entao aplica o enriquecimento no contrato.
-pub fn verify(run: &mut Run) -> Outcome {
-    let c = match compor(run, "verify") {
+pub fn verify(ctx: &mut Ctx) -> Outcome {
+    let c = match compor(ctx, "verify") {
         Ok(c) => c,
         Err(e) => return Outcome::Fail(e),
     };
 
     let mut defeitos = defeitos_da_composicao(&c);
 
-    let aprovacoes = match Aprovacoes::load_or_default(&run.cfg.aprovacoes_path()) {
+    let aprovacoes = match Aprovacoes::load_or_default(&ctx.cfg.aprovacoes_path()) {
         Ok(a) => a,
         Err(e) => return Outcome::Fail(format!("lendo o livro de aprovacoes: {e:#}")),
     };
@@ -121,7 +121,7 @@ pub fn verify(run: &mut Run) -> Outcome {
         ));
     }
 
-    let conferido = match conferir_contra_implement(run, &c) {
+    let conferido = match conferir_contra_implement(ctx, &c) {
         Ok(v) => v,
         Err(e) => {
             defeitos.push(e);
@@ -131,11 +131,11 @@ pub fn verify(run: &mut Run) -> Outcome {
 
     // A proposta recomputada e gravada por cima antes do lint: o que e julgado
     // e o que esta fase calculou, nunca um arquivo que outra fase deixou.
-    if let Err(e) = gravar_proposta(run, &c) {
+    if let Err(e) = gravar_proposta(ctx, &c) {
         return Outcome::Fail(e);
     }
 
-    match lint_do_enriquecido(run) {
+    match lint_do_enriquecido(ctx) {
         Ok(falhas) => defeitos.extend(falhas),
         Err(e) => return Outcome::Fail(e),
     }
@@ -151,12 +151,12 @@ pub fn verify(run: &mut Run) -> Outcome {
         aprovado_em: aprovacao.map(|a| a.aprovado_em.clone()),
         defeitos: defeitos.clone(),
     };
-    if let Err(e) = gravar_veredito(run, &veredito) {
+    if let Err(e) = gravar_veredito(ctx, &veredito) {
         return Outcome::Fail(format!("{e:#}"));
     }
 
     let r = &c.proposta.resumo;
-    run.note(format!(
+    ctx.note(format!(
         "{} campo(s) — {} classificado(s) ({} primeira classificacao, {} inalterado(s)); \
          gate: {} lacuna(s), {} reclassificacao(oes), {} conflito(s)",
         r.campos,
@@ -170,21 +170,21 @@ pub fn verify(run: &mut Run) -> Outcome {
 
     if !defeitos.is_empty() {
         for d in &defeitos {
-            run.note(format!("  defeito — {d}"));
+            ctx.note(format!("  defeito — {d}"));
         }
         return Outcome::Fail(defeitos.join("; "));
     }
 
-    if let Err(e) = relatorio_legivel(run, &c, aprovacao.map(|a| a.aprovado_em.as_str())) {
+    if let Err(e) = relatorio_legivel(ctx, &c, aprovacao.map(|a| a.aprovado_em.as_str())) {
         return Outcome::Fail(e);
     }
 
     // O que sobra depois do PASS. Campo sem classificacao nao reprova o fluxo,
     // mas quem ler o commit daqui a seis meses precisa saber que ele passou
     // sem classificacao — e por decisao de quem.
-    declarar_riscos(run, &c, aprovacao.map(|a| a.aprovado_em.clone()));
+    declarar_riscos(ctx, &c, aprovacao.map(|a| a.aprovado_em.clone()));
 
-    persistir(run, &c)
+    persistir(ctx, &c)
 }
 
 /// O que fica no repositorio depois do PASS: o contrato classificado e o laudo
@@ -196,12 +196,12 @@ pub fn verify(run: &mut Run) -> Outcome {
 /// emite. Laudo escrito e contrato faltando seria um documento afirmando um
 /// sha256 que nao esta em lugar nenhum: um laudo errado, que e pior que um
 /// laudo ausente.
-fn persistir(run: &mut Run, c: &Composicao) -> Outcome {
-    match aplicar_no_contrato(run, c) {
+fn persistir(ctx: &mut Ctx, c: &Composicao) -> Outcome {
+    match aplicar_no_contrato(ctx, c) {
         Outcome::Pass => {}
         outro => return outro,
     }
-    match gravar_laudo(run, c) {
+    match gravar_laudo(ctx, c) {
         Ok(()) => Outcome::Pass,
         Err(e) => Outcome::Fail(e),
     }
@@ -233,7 +233,7 @@ pub(crate) fn defeitos_da_composicao(c: &Composicao) -> Vec<String> {
     defeitos
 }
 
-fn declarar_riscos(run: &mut Run, c: &Composicao, aprovado_em: Option<String>) {
+fn declarar_riscos(ctx: &mut Ctx, c: &Composicao, aprovado_em: Option<String>) {
     let sem_classificacao: Vec<&str> = c
         .proposta
         .campos
@@ -243,20 +243,20 @@ fn declarar_riscos(run: &mut Run, c: &Composicao, aprovado_em: Option<String>) {
         .collect();
 
     if !sem_classificacao.is_empty() {
-        run.risco(format!(
+        ctx.risco(format!(
             "{} campo(s) persistido(s) sem classificacao: {}",
             sem_classificacao.len(),
             sem_classificacao.join(", ")
         ));
     }
     if c.proposta.resumo.reclassificacoes > 0 {
-        run.risco(format!(
+        ctx.risco(format!(
             "{} campo(s) tiveram a classificacao anterior sobrescrita",
             c.proposta.resumo.reclassificacoes
         ));
     }
     if let Some(ts) = aprovado_em {
-        run.risco(format!(
+        ctx.risco(format!(
             "gate liberado por decisao humana em {ts} — pedido {}",
             &c.proposta.gate_sha256[..16]
         ));
@@ -278,12 +278,12 @@ pub(crate) struct Composicao {
     nao_aplicados: Vec<String>,
 }
 
-pub(crate) fn compor(run: &mut Run, fase: &str) -> Result<Composicao, String> {
-    let c = f3_classificar::laudo_atual(run, "f4", fase)?;
+pub(crate) fn compor(ctx: &mut Ctx, fase: &str) -> Result<Composicao, String> {
+    let c = f3_classificar::laudo_atual(ctx, "f4", fase)?;
     let (laudo, catalogo, mapeamento) = (c.laudo, c.catalogo, c.mapeamento);
 
-    let alvo = run.contrato.clone();
-    let path = run.cfg.root.join(&alvo);
+    let alvo = ctx.contrato.clone();
+    let path = ctx.cfg.root.join(&alvo);
     let bruto = fs::read_to_string(&path)
         .map_err(|e| format!("contrato `{alvo}` ilegivel em {} ({e})", path.display()))?;
 
@@ -321,36 +321,36 @@ pub(crate) fn compor(run: &mut Run, fase: &str) -> Result<Composicao, String> {
     })
 }
 
-pub(crate) fn gravar_proposta(run: &mut Run, c: &Composicao) -> Result<(), String> {
-    let json = format!("evidence/{}/f4-proposta.json", run.tracer.run_id());
+pub(crate) fn gravar_proposta(ctx: &mut Ctx, c: &Composicao) -> Result<(), String> {
+    let json = format!("evidence/{}/f4-proposta.json", ctx.tracer.run_id());
     let serializado =
         serializar(&c.proposta).map_err(|e| format!("serializando a proposta: {e:#}"))?;
-    fs::write(run.cfg.root.join(&json), &serializado)
+    fs::write(ctx.cfg.root.join(&json), &serializado)
         .map_err(|e| format!("escrevendo {json}: {e}"))?;
 
-    let yaml = caminho_do_enriquecido(run);
-    fs::write(run.cfg.root.join(&yaml), &c.yaml_enriquecido)
+    let yaml = caminho_do_enriquecido(ctx);
+    fs::write(ctx.cfg.root.join(&yaml), &c.yaml_enriquecido)
         .map_err(|e| format!("escrevendo {yaml}: {e}"))?;
 
-    run.note(format!("proposta {json} | contrato proposto {yaml}"));
+    ctx.note(format!("proposta {json} | contrato proposto {yaml}"));
     Ok(())
 }
 
-pub(crate) fn caminho_do_enriquecido(run: &Run) -> String {
+pub(crate) fn caminho_do_enriquecido(ctx: &Ctx) -> String {
     format!(
         "evidence/{}/f4-contrato-enriquecido.odcs.yaml",
-        run.tracer.run_id()
+        ctx.tracer.run_id()
     )
 }
 
 /// A comparacao byte a byte com o que `implement` propos. So existe quando as
 /// duas fases rodaram no mesmo run — rodando `verify` sozinho nao ha com o que
 /// comparar, e a nota diz isso em vez de omitir.
-fn conferir_contra_implement(run: &mut Run, c: &Composicao) -> Result<bool, String> {
-    let json = run.evidence_dir.join("f4-proposta.json");
-    let yaml = run.evidence_dir.join("f4-contrato-enriquecido.odcs.yaml");
+fn conferir_contra_implement(ctx: &mut Ctx, c: &Composicao) -> Result<bool, String> {
+    let json = ctx.evidence_dir.join("f4-proposta.json");
+    let yaml = ctx.evidence_dir.join("f4-contrato-enriquecido.odcs.yaml");
     if !json.exists() || !yaml.exists() {
-        run.note("sem proposta de `implement` neste run — nada a conferir".to_string());
+        ctx.note("sem proposta de `implement` neste run — nada a conferir".to_string());
         return Ok(false);
     }
 
@@ -368,7 +368,7 @@ fn conferir_contra_implement(run: &mut Run, c: &Composicao) -> Result<bool, Stri
         );
     }
 
-    run.note("recomputacao bate com a proposta de `implement`".to_string());
+    ctx.note("recomputacao bate com a proposta de `implement`".to_string());
     Ok(true)
 }
 
@@ -377,11 +377,11 @@ fn conferir_contra_implement(run: &mut Run, c: &Composicao) -> Result<bool, Stri
 /// F1 ja garante que o contrato entra valido; este e o unico lugar onde ainda
 /// dava para quebrar o padrao — escrevendo nele. Fecha o criterio do
 /// `contexto.md` sobre a saida.
-pub(crate) fn lint_do_enriquecido(run: &mut Run) -> Result<Vec<String>, String> {
-    let proposta = caminho_do_enriquecido(run);
-    let destino = format!("evidence/{}/f4-lint-enriquecido.json", run.tracer.run_id());
+pub(crate) fn lint_do_enriquecido(ctx: &mut Ctx) -> Result<Vec<String>, String> {
+    let proposta = caminho_do_enriquecido(ctx);
+    let destino = format!("evidence/{}/f4-lint-enriquecido.json", ctx.tracer.run_id());
 
-    let saida = run
+    let saida = ctx
         .datacontract(
             "verify-lint-enriquecido",
             &[
@@ -395,7 +395,7 @@ pub(crate) fn lint_do_enriquecido(run: &mut Run) -> Result<Vec<String>, String> 
         )
         .map_err(|e| format!("{e}"))?;
 
-    let bruto = fs::read_to_string(run.cfg.root.join(&destino)).map_err(|e| {
+    let bruto = fs::read_to_string(ctx.cfg.root.join(&destino)).map_err(|e| {
         format!(
             "lint do enriquecido saiu com {} e nao deixou relatorio em {destino} ({e})",
             saida.exit_code
@@ -403,7 +403,7 @@ pub(crate) fn lint_do_enriquecido(run: &mut Run) -> Result<Vec<String>, String> 
     })?;
     let veredito = f1_validar::ler_veredito(&bruto).map_err(|e| format!("{e:#}"))?;
 
-    run.note(format!(
+    ctx.note(format!(
         "lint do contrato enriquecido {} — {} check(s), relatorio {destino}",
         if veredito.passed { "PASS" } else { "FAIL" },
         veredito.checks
@@ -430,15 +430,15 @@ pub(crate) fn lint_do_enriquecido(run: &mut Run) -> Result<Vec<String>, String> 
 /// Depois do veredito, nunca antes. Um `implement` que escrevesse aqui deixaria
 /// o repositorio num estado que nenhuma fase aprovou, e um `Blocked` teria de
 /// saber desfazer o que escreveu.
-fn aplicar_no_contrato(run: &mut Run, c: &Composicao) -> Outcome {
+fn aplicar_no_contrato(ctx: &mut Ctx, c: &Composicao) -> Outcome {
     // Do que a proposta diz, e nao de `run`: e o mesmo caminho, e ler daqui faz
     // o artefato julgado e o arquivo escrito serem o mesmo por construcao.
     let alvo = c.proposta.contrato.clone();
-    let destino = run.cfg.root.join(&alvo);
+    let destino = ctx.cfg.root.join(&alvo);
     let atual = fs::read_to_string(&destino).unwrap_or_default();
 
     if atual == c.yaml_enriquecido {
-        run.note(format!(
+        ctx.note(format!(
             "contrato {alvo} ja reflete a classificacao vigente — nada a escrever"
         ));
         return Outcome::Pass;
@@ -447,7 +447,7 @@ fn aplicar_no_contrato(run: &mut Run, c: &Composicao) -> Outcome {
     if let Err(e) = fs::write(&destino, &c.yaml_enriquecido) {
         return Outcome::Fail(format!("escrevendo {alvo}: {e}"));
     }
-    run.note(format!(
+    ctx.note(format!(
         "contrato {alvo} enriquecido — {} campo(s) marcado(s); o diff vai no commit do handoff",
         c.proposta.resumo.classificados
     ));
@@ -525,7 +525,7 @@ pub fn versao_do_yaml(bruto: &str) -> Result<String> {
 }
 
 /// Emite o laudo, ou reconhece que ele ja foi emitido para este conteudo.
-fn gravar_laudo(run: &mut Run, c: &Composicao) -> Result<(), String> {
+fn gravar_laudo(ctx: &mut Ctx, c: &Composicao) -> Result<(), String> {
     // A versao e o sha saem do contrato **classificado**, e nao da fonte: e o
     // arquivo classificado que fica no repositorio, e e a ele que o laudo
     // responde.
@@ -539,7 +539,7 @@ fn gravar_laudo(run: &mut Run, c: &Composicao) -> Result<(), String> {
     );
     let corpo = documento_do_laudo(&c.proposta, &c.laudo, &versao, &sha);
 
-    let path = run.cfg.root.join(&destino);
+    let path = ctx.cfg.root.join(&destino);
     if let Some(dir) = path.parent() {
         fs::create_dir_all(dir).map_err(|e| format!("criando {}: {e}", dir.display()))?;
     }
@@ -548,14 +548,14 @@ fn gravar_laudo(run: &mut Run, c: &Composicao) -> Result<(), String> {
     // mesmo conteudo no mesmo caminho significa que este laudo ja existe. Sem
     // isto, rodar o fluxo duas vezes sujaria o `git status` sem nada ter mudado.
     if fs::read_to_string(&path).is_ok_and(|atual| atual == corpo) {
-        run.note(format!(
+        ctx.note(format!(
             "laudo {destino} ja emitido para este conteudo — nada a escrever"
         ));
         return Ok(());
     }
 
     fs::write(&path, &corpo).map_err(|e| format!("escrevendo {destino}: {e}"))?;
-    run.note(format!("laudo emitido em {destino}"));
+    ctx.note(format!("laudo emitido em {destino}"));
     Ok(())
 }
 
@@ -717,7 +717,7 @@ pub(crate) fn documento_do_laudo(p: &Proposta, l: &Laudo, versao: &str, sha_fina
 /// O pedido mora em `state/`, e nao em `evidence/`: e estado do ciclo, e quem
 /// o consome e o comando `approve`. A evidencia do run guarda a proposta
 /// inteira; o pedido guarda o que precisa de resposta.
-fn bloquear(run: &mut Run, p: &Proposta) -> Outcome {
+fn bloquear(ctx: &mut Ctx, p: &Proposta) -> Outcome {
     let itens: Vec<String> = p.gate.iter().map(ItemDeGate::linha).collect();
     let resumo = format!(
         "{} lacuna(s), {} reclassificacao(oes), {} conflito(s)",
@@ -728,47 +728,47 @@ fn bloquear(run: &mut Run, p: &Proposta) -> Outcome {
         schema_version: SCHEMA_VERSION,
         feature: FEATURE.to_string(),
         gate_sha256: p.gate_sha256.clone(),
-        run_id: run.tracer.run_id().to_string(),
+        run_id: ctx.tracer.run_id().to_string(),
         criado_em: trace::now_rfc3339(),
         resumo: resumo.clone(),
         itens: itens.clone(),
     };
-    if let Err(e) = pedido.save(&run.cfg.gate_pendente_path()) {
+    if let Err(e) = pedido.save(&ctx.cfg.gate_pendente_path()) {
         return Outcome::Fail(format!("gravando o pedido de gate: {e:#}"));
     }
 
     for linha in &itens {
-        run.note(format!("  gate — {linha}"));
+        ctx.note(format!("  gate — {linha}"));
     }
-    run.note(format!(
-        "pedido {} registrado em state/gate-pendente.json — libere com `./run.sh approve {FEATURE}`",
+    ctx.note(format!(
+        "pedido {} registrado em state/gate-pendente.json — libere com `./ctx.sh approve {FEATURE}`",
         &p.gate_sha256[..16]
     ));
 
     Outcome::Blocked(format!("{resumo} aguardando decisao humana"))
 }
 
-fn gravar_veredito(run: &mut Run, v: &Veredito) -> Result<()> {
-    let destino = format!("evidence/{}/f4-veredito.json", run.tracer.run_id());
+fn gravar_veredito(ctx: &mut Ctx, v: &Veredito) -> Result<()> {
+    let destino = format!("evidence/{}/f4-veredito.json", ctx.tracer.run_id());
     let corpo = serde_json::to_string_pretty(v).context("serializando o veredito")?;
-    fs::write(run.cfg.root.join(&destino), corpo)
+    fs::write(ctx.cfg.root.join(&destino), corpo)
         .with_context(|| format!("escrevendo {destino}"))?;
-    run.note(format!("veredito {destino}"));
+    ctx.note(format!("veredito {destino}"));
     Ok(())
 }
 
 fn relatorio_legivel(
-    run: &mut Run,
+    ctx: &mut Ctx,
     c: &Composicao,
     aprovado_em: Option<&str>,
 ) -> Result<(), String> {
-    let destino = format!("evidence/{}/f4-relatorio.md", run.tracer.run_id());
+    let destino = format!("evidence/{}/f4-relatorio.md", ctx.tracer.run_id());
     fs::write(
-        run.cfg.root.join(&destino),
+        ctx.cfg.root.join(&destino),
         markdown(&c.proposta, aprovado_em),
     )
     .map_err(|e| format!("escrevendo {destino}: {e}"))?;
-    run.note(format!("relatorio {destino}"));
+    ctx.note(format!("relatorio {destino}"));
     Ok(())
 }
 
@@ -1264,7 +1264,7 @@ pub struct ResumoGate {
 /// A proposta de enriquecimento.
 ///
 /// **Sem `run_id` e sem timestamp**, como em F2 e F3: o mesmo contrato com o
-/// mesmo glossario e o mesmo catalogo produz o mesmo arquivo em qualquer run.
+/// mesmo glossario e o mesmo catalogo produz o mesmo arquivo em qualquer ctx.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct Proposta {
     pub contrato: String,
@@ -1353,7 +1353,7 @@ fn markdown(p: &Proposta, aprovado_em: Option<&str>) -> String {
                 &p.gate_sha256[..16]
             )),
             None => s.push_str(&format!(
-                "**Pendentes.** Pedido `{}` — libere com `./run.sh approve {FEATURE}`.\n\n",
+                "**Pendentes.** Pedido `{}` — libere com `./ctx.sh approve {FEATURE}`.\n\n",
                 &p.gate_sha256[..16]
             )),
         }

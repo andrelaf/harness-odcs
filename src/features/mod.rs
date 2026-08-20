@@ -24,24 +24,24 @@ pub mod f5_aninhado;
 pub mod f6_divergencia;
 
 use crate::flow::{Outcome, Phase};
-use crate::phases::Run;
+use crate::ctx::Ctx;
 
 /// Quem atende `(feature, fase)`. `None` significa "ninguem" — o chamador
 /// segue para o no-op.
-pub fn dispatch(run: &mut Run, phase: Phase) -> Option<Outcome> {
-    match (run.feature_id.as_str(), phase) {
-        ("f1-validar", Phase::Implement) => Some(f1_validar::implement(run)),
-        ("f1-validar", Phase::Verify) => Some(f1_validar::verify(run)),
-        ("f2-mapear", Phase::Implement) => Some(f2_mapear::implement(run)),
-        ("f2-mapear", Phase::Verify) => Some(f2_mapear::verify(run)),
-        ("f3-classificar", Phase::Implement) => Some(f3_classificar::implement(run)),
-        ("f3-classificar", Phase::Verify) => Some(f3_classificar::verify(run)),
-        ("f4-gate", Phase::Implement) => Some(f4_gate::implement(run)),
-        ("f4-gate", Phase::Verify) => Some(f4_gate::verify(run)),
-        ("f5-aninhado", Phase::Implement) => Some(f5_aninhado::implement(run)),
-        ("f5-aninhado", Phase::Verify) => Some(f5_aninhado::verify(run)),
-        ("f6-divergencia", Phase::Implement) => Some(f6_divergencia::implement(run)),
-        ("f6-divergencia", Phase::Verify) => Some(f6_divergencia::verify(run)),
+pub fn dispatch(ctx: &mut Ctx, phase: Phase) -> Option<Outcome> {
+    match (ctx.feature_id.as_str(), phase) {
+        ("f1-validar", Phase::Implement) => Some(f1_validar::implement(ctx)),
+        ("f1-validar", Phase::Verify) => Some(f1_validar::verify(ctx)),
+        ("f2-mapear", Phase::Implement) => Some(f2_mapear::implement(ctx)),
+        ("f2-mapear", Phase::Verify) => Some(f2_mapear::verify(ctx)),
+        ("f3-classificar", Phase::Implement) => Some(f3_classificar::implement(ctx)),
+        ("f3-classificar", Phase::Verify) => Some(f3_classificar::verify(ctx)),
+        ("f4-gate", Phase::Implement) => Some(f4_gate::implement(ctx)),
+        ("f4-gate", Phase::Verify) => Some(f4_gate::verify(ctx)),
+        ("f5-aninhado", Phase::Implement) => Some(f5_aninhado::implement(ctx)),
+        ("f5-aninhado", Phase::Verify) => Some(f5_aninhado::verify(ctx)),
+        ("f6-divergencia", Phase::Implement) => Some(f6_divergencia::implement(ctx)),
+        ("f6-divergencia", Phase::Verify) => Some(f6_divergencia::verify(ctx)),
         _ => None,
     }
 }

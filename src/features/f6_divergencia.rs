@@ -14,10 +14,10 @@
 
 use super::f4_gate;
 use crate::flow::Outcome;
-use crate::phases::Run;
+use crate::ctx::Ctx;
 
-pub fn implement(run: &mut Run) -> Outcome {
-    f4_gate::implement(run)
+pub fn implement(ctx: &mut Ctx) -> Outcome {
+    f4_gate::implement(ctx)
 }
 
 /// Reprova se o enriquecimento voltar a sobrescrever quem discorda.
@@ -26,8 +26,8 @@ pub fn implement(run: &mut Run) -> Outcome {
 /// exige que todo campo em reclassificacao tenha sobrevivido intacto. Um
 /// enriquecimento que "corrige" a divergencia passa no lint e produz laudo — por
 /// isso a checagem precisa ser de fase, e nao de teste opcional.
-pub fn verify(run: &mut Run) -> Outcome {
-    let c = match f4_gate::compor(run, "verify") {
+pub fn verify(ctx: &mut Ctx) -> Outcome {
+    let c = match f4_gate::compor(ctx, "verify") {
         Ok(c) => c,
         Err(e) => return Outcome::Fail(e),
     };
@@ -37,7 +37,7 @@ pub fn verify(run: &mut Run) -> Outcome {
         Err(e) => return Outcome::Fail(format!("{e:#}")),
     };
     // O contrato como esta no disco — a declaracao que precisa sobreviver.
-    let caminho = run.cfg.root.join(&run.contrato);
+    let caminho = ctx.cfg.root.join(&ctx.contrato);
     let original = match std::fs::read_to_string(&caminho) {
         Ok(b) => match f4_gate::declaracao_do_yaml(&b) {
             Ok(d) => d,
@@ -65,7 +65,7 @@ pub fn verify(run: &mut Run) -> Outcome {
         }
     }
 
-    run.note(format!(
+    ctx.note(format!(
         "{} campo(s) em divergencia preservado(s) — o contrato mantem o que declarou",
         divergentes.len()
     ));

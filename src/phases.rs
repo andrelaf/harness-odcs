@@ -5,111 +5,37 @@
 //! substituiveis e o ponto de escrita unico.
 
 use crate::checks;
-use crate::config::Config;
+use crate::ctx::Ctx;
 use crate::features;
 use crate::flow::{Outcome, Phase};
 use crate::state::{FeatureList, FeatureStatus, Progress};
-use crate::tools::{self, ToolOutcome};
-use crate::trace::{Draft, Tracer};
-use anyhow::Result;
-use std::path::PathBuf;
 
+/// O que a maquina de estados possui, mais o contexto que ela empresta ao
+/// dominio.
+///
+/// A divisao nao e arrumacao: `features/` nunca leu `features` nem `progress` —
+/// zero ocorrencias —, e `check` carregava os dois do disco so para preencher
+/// este struct, sem jamais salva-los. O tipo agora diz o que ja era verdade.
 pub struct Run {
-    pub cfg: Config,
+    /// Emprestado ao dominio como `&mut Ctx`. Tudo que uma fase de dominio
+    /// precisa saber sobre o mundo esta aqui, e nada do que ela nao deve mexer.
+    pub ctx: Ctx,
     pub features: FeatureList,
     pub progress: Progress,
-    pub tracer: Tracer,
-    pub feature_id: String,
-    /// O contrato que este run opera, relativo a raiz e sempre com `/`.
-    ///
-    /// Resolvido uma vez, na abertura do run, e nao reconsultado depois: as
-    /// fases de dominio precisam concordar sobre qual arquivo estao lendo,
-    /// classificando e escrevendo. Um `descobrir` por fase deixaria `implement`
-    /// e `verify` trabalhando em contratos diferentes se um arquivo aparecesse
-    /// no meio do run.
-    pub contrato: String,
-    pub evidence_dir: PathBuf,
-    pub tool_seq: u32,
-    /// Linhas para o operador, impressas pela fase corrente.
-    pub notes: Vec<String>,
     /// `fase=RESULTADO` de cada fase ja concluida neste run. Preenchido pelo
     /// laco, e nao pelas fases: quem sabe o desfecho e quem o julga.
     ///
     /// E o registro de verificacao que o handoff leva para o commit — em
     /// particular o resultado de `verify`, que e o que prova o trabalho.
     pub resultados: Vec<String>,
-    /// O que a feature quer que fique registrado como risco remanescente.
-    ///
-    /// Diferente de `notes`: notas sao do momento e somem no fim da fase;
-    /// risco atravessa o run e entra no commit. Um campo classificado como
-    /// lacuna nao reprova o fluxo, mas quem ler o commit daqui a seis meses
-    /// precisa saber que ele passou sem classificacao.
-    pub riscos: Vec<String>,
-}
-
-impl Run {
-    /// Unico caminho para executar processo externo dentro de um run.
-    pub fn tool(&mut self, label: &str, program: &str, args: &[&str]) -> Result<ToolOutcome> {
-        self.tool_seq += 1;
-        let labeled = format!("{:02}-{label}", self.tool_seq);
-        let out = tools::run(program, args, &self.evidence_dir, &labeled)?;
-
-        let evidence = out
-            .evidence_path
-            .as_ref()
-            .and_then(|p| p.file_name())
-            .map(|n| n.to_string_lossy().to_string())
-            .unwrap_or_else(|| "-".to_string());
-
-        self.tracer.emit(
-            "tool_exec",
-            Draft {
-                feature: Some(self.feature_id.clone()),
-                result: Some(if out.ok() { "PASS" } else { "FAIL" }.to_string()),
-                duration_ms: Some(out.duration_ms),
-                exit_code: Some(out.exit_code),
-                step: self.progress.step_count,
-                // Referencia + hash. A saida bruta fica em evidence/, nunca
-                // no trace: e o trace que circula.
-                msg: format!(
-                    "{} | evidence={} sha256={}",
-                    out.command_line(),
-                    evidence,
-                    &out.stdout_sha256[..16]
-                ),
-                ..Default::default()
-            },
-        )?;
-
-        Ok(out)
-    }
-
-    /// Invocacao do `datacontract-cli` no container fixado.
-    ///
-    /// Passa pelo mesmo `tool`, entao cai no trace com comando, exit code e
-    /// duracao como qualquer outro processo — inclusive a tag da imagem, que e
-    /// o que torna o run reproduzivel meses depois.
-    pub fn datacontract(&mut self, label: &str, args: &[&str]) -> Result<ToolOutcome> {
-        let image = self.cfg.dc_image.clone();
-        let root = self.cfg.root.display().to_string();
-        let montado = tools::datacontract_args(&image, &root, args);
-        let refs: Vec<&str> = montado.iter().map(String::as_str).collect();
-        self.tool(label, "docker", &refs)
-    }
-
-    pub fn note(&mut self, s: impl Into<String>) {
-        self.notes.push(s.into());
-    }
-
-    /// Declara um risco remanescente. Sobrevive ao fim da fase e vai para o
-    /// corpo do commit de `handoff`.
-    pub fn risco(&mut self, s: impl Into<String>) {
-        self.riscos.push(s.into());
-    }
 }
 
 pub fn execute(phase: Phase, run: &mut Run) -> Outcome {
-    run.notes.clear();
+    run.ctx.notes.clear();
+    // O passo corrente, copiado antes de cada fase. E o que permite o `tool` do
+    // dominio carimbar o trace sem enxergar o `Progress` — ler o numero e uma
+    // coisa, ser dono dele e outra.
+    run.ctx.step = run.progress.step_count;
     match phase {
         Phase::Start => start(run),
         Phase::Plan => plan(run),
@@ -124,15 +50,15 @@ pub fn execute(phase: Phase, run: &mut Run) -> Outcome {
 }
 
 fn start(run: &mut Run) -> Outcome {
-    run.note(format!("run_id {}", run.tracer.run_id()));
+    run.ctx.note(format!("run_id {}", run.ctx.tracer.run_id()));
     Outcome::Pass
 }
 
 fn plan(run: &mut Run) -> Outcome {
-    let id = run.feature_id.clone();
+    let id = run.ctx.feature_id.clone();
     match run.features.get(&id) {
         Some(f) => {
-            run.note(format!("feature {} — {}", f.id, f.title));
+            run.ctx.note(format!("feature {} — {}", f.id, f.title));
             Outcome::Pass
         }
         None => Outcome::Fail(format!("feature `{id}` nao esta na lista")),
@@ -140,7 +66,7 @@ fn plan(run: &mut Run) -> Outcome {
 }
 
 fn bearings(run: &mut Run) -> Outcome {
-    let branch = match run.tool(
+    let branch = match run.ctx.tool(
         "bearings-branch",
         "git",
         &["rev-parse", "--abbrev-ref", "HEAD"],
@@ -149,19 +75,19 @@ fn bearings(run: &mut Run) -> Outcome {
         Ok(o) => return Outcome::Fail(format!("git rev-parse saiu com {}", o.exit_code)),
         Err(e) => return Outcome::Fail(format!("{e}")),
     };
-    let head = match run.tool("bearings-head", "git", &["log", "-1", "--format=%h %s"]) {
+    let head = match run.ctx.tool("bearings-head", "git", &["log", "-1", "--format=%h %s"]) {
         Ok(o) if o.ok() => o.first_line(),
         // Repositorio sem commit ainda nao e erro de fluxo.
         Ok(_) => "sem commits".to_string(),
         Err(e) => return Outcome::Fail(format!("{e}")),
     };
-    run.note(format!("branch {branch} | HEAD {head}"));
+    run.ctx.note(format!("branch {branch} | HEAD {head}"));
     Outcome::Pass
 }
 
 fn smoke(run: &mut Run) -> Outcome {
-    let cfg = run.cfg.clone();
-    let mut exec = |label: &str, program: &str, args: &[&str]| run.tool(label, program, args);
+    let cfg = run.ctx.cfg.clone();
+    let mut exec = |label: &str, program: &str, args: &[&str]| run.ctx.tool(label, program, args);
     let results = checks::environment(&cfg, &mut exec);
 
     let failed: Vec<&checks::Check> = results.iter().filter(|c| !c.ok).collect();
@@ -177,7 +103,7 @@ fn smoke(run: &mut Run) -> Outcome {
         })
         .collect();
     for line in summary {
-        run.note(line);
+        run.ctx.note(line);
     }
 
     if failed.is_empty() {
@@ -194,14 +120,14 @@ fn smoke(run: &mut Run) -> Outcome {
 }
 
 fn pick(run: &mut Run) -> Outcome {
-    let id = run.feature_id.clone();
+    let id = run.ctx.feature_id.clone();
     if let Err(e) = run.features.set_status(&id, FeatureStatus::InProgress) {
         return Outcome::Fail(format!("{e}"));
     }
 
     // O harness nao escreve na main: cada feature tem a sua branch.
     let want = format!("feat/{id}");
-    let current = match run.tool("pick-branch", "git", &["rev-parse", "--abbrev-ref", "HEAD"]) {
+    let current = match run.ctx.tool("pick-branch", "git", &["rev-parse", "--abbrev-ref", "HEAD"]) {
         Ok(o) if o.ok() => o.first_line(),
         Ok(o) => return Outcome::Fail(format!("git rev-parse saiu com {}", o.exit_code)),
         Err(e) => return Outcome::Fail(format!("{e}")),
@@ -209,6 +135,7 @@ fn pick(run: &mut Run) -> Outcome {
 
     if current != want {
         let exists = run
+            .ctx
             .tool(
                 "pick-branch-existe",
                 "git",
@@ -221,8 +148,8 @@ fn pick(run: &mut Run) -> Outcome {
         } else {
             vec!["checkout", "-b", &want]
         };
-        match run.tool("pick-checkout", "git", &args) {
-            Ok(o) if o.ok() => run.note(format!(
+        match run.ctx.tool("pick-checkout", "git", &args) {
+            Ok(o) if o.ok() => run.ctx.note(format!(
                 "branch {want} ({})",
                 if exists { "existente" } else { "criada" }
             )),
@@ -236,7 +163,7 @@ fn pick(run: &mut Run) -> Outcome {
             Err(e) => return Outcome::Fail(format!("{e}")),
         }
     } else {
-        run.note(format!("branch {want} (ja ativa)"));
+        run.ctx.note(format!("branch {want} (ja ativa)"));
     }
 
     Outcome::Pass
@@ -254,22 +181,22 @@ fn pick(run: &mut Run) -> Outcome {
 /// dai a nota explicita, que foi justamente o que denunciou F1 concluida sem
 /// validar nada.
 fn dominio_ou_noop(run: &mut Run, phase: Phase) -> Outcome {
-    if let Some(outcome) = features::dispatch(run, phase) {
+    if let Some(outcome) = features::dispatch(&mut run.ctx, phase) {
         return outcome;
     }
-    run.note(format!(
+    run.ctx.note(format!(
         "sem implementacao de dominio para `{phase}` em `{}` — no-op",
-        run.feature_id
+        run.ctx.feature_id
     ));
     Outcome::Pass
 }
 
 fn handoff(run: &mut Run) -> Outcome {
-    let id = run.feature_id.clone();
+    let id = run.ctx.feature_id.clone();
 
     // Defesa em profundidade: mesmo que `pick` tenha falhado em trocar de
     // branch, o commit nao acontece na main.
-    let branch = match run.tool(
+    let branch = match run.ctx.tool(
         "handoff-branch",
         "git",
         &["rev-parse", "--abbrev-ref", "HEAD"],
@@ -295,10 +222,10 @@ fn handoff(run: &mut Run) -> Outcome {
     if let Err(e) = run.features.set_status(&id, FeatureStatus::Done) {
         return Outcome::Fail(format!("{e}"));
     }
-    if let Err(e) = run.features.save(&run.cfg.feature_list_path()) {
+    if let Err(e) = run.features.save(&run.ctx.cfg.feature_list_path()) {
         return Outcome::Fail(format!("persistindo feature-list antes do commit: {e}"));
     }
-    if let Err(e) = run.progress.save(&run.cfg.progress_path()) {
+    if let Err(e) = run.progress.save(&run.ctx.cfg.progress_path()) {
         return Outcome::Fail(format!("persistindo progress antes do commit: {e}"));
     }
 
@@ -314,7 +241,7 @@ fn handoff(run: &mut Run) -> Outcome {
     // abaixo e as ultimas linhas do trace, que so existem depois dele. Um
     // commit nao contem o registro da sua propria criacao — essas linhas
     // entram no run seguinte.
-    match run.tool(
+    match run.ctx.tool(
         "handoff-add",
         "git",
         &["add", "state", "trace", "evidence", "contracts"],
@@ -324,7 +251,7 @@ fn handoff(run: &mut Run) -> Outcome {
         Err(e) => return Outcome::Fail(format!("{e}")),
     }
 
-    let staged = match run.tool(
+    let staged = match run.ctx.tool(
         "handoff-staged",
         "git",
         &["diff", "--cached", "--name-only"],
@@ -334,7 +261,7 @@ fn handoff(run: &mut Run) -> Outcome {
     };
 
     if staged.is_empty() {
-        run.note("nada novo para commitar".to_string());
+        run.ctx.note("nada novo para commitar".to_string());
     } else {
         // O corpo do commit e o handoff que o brief pede: resumo, verificacao
         // e riscos. Sem eles o historico registraria que algo aconteceu, mas
@@ -348,19 +275,19 @@ fn handoff(run: &mut Run) -> Outcome {
         } else {
             format!("fases: {}", run.resultados.join(" "))
         };
-        let riscos = if run.riscos.is_empty() {
+        let riscos = if run.ctx.riscos.is_empty() {
             "riscos: nenhum declarado pela feature".to_string()
         } else {
-            format!("riscos:\n  - {}", run.riscos.join("\n  - "))
+            format!("riscos:\n  - {}", run.ctx.riscos.join("\n  - "))
         };
         let body = format!(
             "run_id: {}\npassos: {}/{}\n{verificacao}\n{riscos}\n\
              artefatos: state/, trace/, evidence/, contracts/",
-            run.tracer.run_id(),
+            run.ctx.tracer.run_id(),
             run.progress.step_count,
             run.progress.max_steps
         );
-        match run.tool(
+        match run.ctx.tool(
             "handoff-commit",
             "git",
             &["commit", "-m", &subject, "-m", &body],
@@ -376,12 +303,12 @@ fn handoff(run: &mut Run) -> Outcome {
             Err(e) => return Outcome::Fail(format!("{e}")),
         }
 
-        match run.tool("handoff-hash", "git", &["rev-parse", "--short", "HEAD"]) {
+        match run.ctx.tool("handoff-hash", "git", &["rev-parse", "--short", "HEAD"]) {
             Ok(o) if o.ok() => {
                 let hash = o.first_line();
-                run.note(format!("commit {hash} em {branch}"));
+                run.ctx.note(format!("commit {hash} em {branch}"));
             }
-            _ => run.note(format!("commit criado em {branch}")),
+            _ => run.ctx.note(format!("commit criado em {branch}")),
         }
     }
 
@@ -389,6 +316,6 @@ fn handoff(run: &mut Run) -> Outcome {
 }
 
 fn stop(run: &mut Run) -> Outcome {
-    run.note(format!("feature {} concluida", run.feature_id));
+    run.ctx.note(format!("feature {} concluida", run.ctx.feature_id));
     Outcome::Pass
 }

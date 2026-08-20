@@ -14,10 +14,10 @@
 
 use super::{contrato, f4_gate};
 use crate::flow::Outcome;
-use crate::phases::Run;
+use crate::ctx::Ctx;
 
-pub fn implement(run: &mut Run) -> Outcome {
-    f4_gate::implement(run)
+pub fn implement(ctx: &mut Ctx) -> Outcome {
+    f4_gate::implement(ctx)
 }
 
 /// Reprova se a arvore deixar de ser percorrida.
@@ -26,8 +26,8 @@ pub fn implement(run: &mut Run) -> Outcome {
 /// **caminho** entre os campos. Sem esta checagem, uma regressao na extracao
 /// voltaria a esconder dado pessoal e ainda assim emitiria laudo — que e o
 /// cenario que esta feature existe para impedir.
-pub fn verify(run: &mut Run) -> Outcome {
-    let campos = match contrato::extrair(run, "f5-aninhado", "verify") {
+pub fn verify(ctx: &mut Ctx) -> Outcome {
+    let campos = match contrato::extrair(ctx, "f5-aninhado", "verify") {
         Ok(c) => c,
         Err(e) => return Outcome::Fail(e),
     };
@@ -52,7 +52,7 @@ pub fn verify(run: &mut Run) -> Outcome {
     }
 
     let aninhados = nomes.iter().filter(|n| n.contains('.')).count();
-    run.note(format!(
+    ctx.note(format!(
         "{} campo(s), {} em profundidade — nenhum container reportado como folha",
         campos.len(),
         aninhados

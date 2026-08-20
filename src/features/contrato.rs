@@ -10,7 +10,7 @@
 //! existiriam duas interpretacoes do ODCS no repositorio — a segunda sendo a
 //! errada.
 
-use crate::phases::Run;
+use crate::ctx::Ctx;
 use crate::tools;
 use anyhow::{Context, Result, bail};
 use std::collections::BTreeMap;
@@ -21,7 +21,7 @@ use std::path::Path;
 ///
 /// O contrato deixou de ser uma constante: um repositorio de dados tem N
 /// contratos, e o harness precisa saber em qual esta trabalhando. O caminho
-/// resolvido vive em `Run::contrato`, escolhido uma vez por run.
+/// resolvido vive em `Ctx::contrato`, escolhido uma vez por run.
 pub const DIRETORIO: &str = "contracts";
 pub const ARQUIVO: &str = "contract.odcs.yaml";
 
@@ -263,24 +263,24 @@ pub struct Campo {
 /// O destino da evidencia leva feature **e** fase: os arquivos lado a lado sao
 /// a prova de que a extracao se repete. Um destino unico faria a segunda fase
 /// apagar a prova da primeira.
-pub fn extrair(run: &mut Run, feature: &str, fase: &str) -> Result<Vec<Campo>, String> {
-    if let Err(e) = tools::criar_dir_de_evidencia(&run.evidence_dir) {
+pub fn extrair(ctx: &mut Ctx, feature: &str, fase: &str) -> Result<Vec<Campo>, String> {
+    if let Err(e) = tools::criar_dir_de_evidencia(&ctx.evidence_dir) {
         return Err(format!("{e:#}"));
     }
 
     let destino = format!(
         "evidence/{}/{feature}-campos-{fase}.json",
-        run.tracer.run_id()
+        ctx.tracer.run_id()
     );
-    let alvo = run.contrato.clone();
-    let saida = run
+    let alvo = ctx.contrato.clone();
+    let saida = ctx
         .datacontract(
             &format!("{fase}-campos"),
             &["export", "jsonschema", &alvo, "--output", &destino],
         )
         .map_err(|e| format!("{e}"))?;
 
-    let bruto = fs::read_to_string(run.cfg.root.join(&destino)).map_err(|e| {
+    let bruto = fs::read_to_string(ctx.cfg.root.join(&destino)).map_err(|e| {
         format!(
             "`export jsonschema` saiu com {} e nao deixou {destino} ({e})",
             saida.exit_code
@@ -295,14 +295,14 @@ pub fn extrair(run: &mut Run, feature: &str, fase: &str) -> Result<Vec<Campo>, S
 
 /// Identidade da entrada, pelo mesmo motivo de F1: quando dois runs
 /// discordarem, foi o contrato que mudou ou a ferramenta?
-pub fn sha(run: &Run) -> Result<String, String> {
-    let path = run.cfg.root.join(&run.contrato);
+pub fn sha(ctx: &Ctx) -> Result<String, String> {
+    let path = ctx.cfg.root.join(&ctx.contrato);
     fs::read_to_string(&path)
         .map(|s| tools::sha256_hex(&s))
         .map_err(|e| {
             format!(
                 "contrato `{}` ilegivel em {} ({e})",
-                run.contrato,
+                ctx.contrato,
                 path.display()
             )
         })

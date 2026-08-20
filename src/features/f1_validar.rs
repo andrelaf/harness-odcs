@@ -17,16 +17,16 @@
 
 use crate::features::contrato;
 use crate::flow::Outcome;
-use crate::phases::Run;
+use crate::ctx::Ctx;
 use crate::tools::{self, ToolOutcome};
 use anyhow::{Context, Result};
 use serde::Deserialize;
 use std::fs;
 
 /// Resolve o contrato e registra a identidade do que sera validado.
-pub fn implement(run: &mut Run) -> Outcome {
-    let alvo = run.contrato.clone();
-    let host = run.cfg.root.join(&alvo);
+pub fn implement(ctx: &mut Ctx) -> Outcome {
+    let alvo = ctx.contrato.clone();
+    let host = ctx.cfg.root.join(&alvo);
     let raw = match fs::read_to_string(&host) {
         Ok(s) => s,
         Err(e) => {
@@ -40,7 +40,7 @@ pub fn implement(run: &mut Run) -> Outcome {
     // Identidade do que foi validado. Sem o hash, dois runs com resultados
     // diferentes nao teriam como provar se o contrato mudou entre eles.
     let sha = tools::sha256_hex(&raw);
-    run.note(format!(
+    ctx.note(format!(
         "contrato {alvo} — {} bytes, sha256 {}",
         raw.len(),
         &sha[..16]
@@ -50,9 +50,9 @@ pub fn implement(run: &mut Run) -> Outcome {
 
 /// Roda o lint contra o schema ODCS, devolve PASS/FAIL a partir do veredito e,
 /// quando passa, deixa o relatorio legivel ao lado.
-pub fn verify(run: &mut Run) -> Outcome {
-    let destino = format!("evidence/{}/f1-lint.json", run.tracer.run_id());
-    if let Err(e) = tools::criar_dir_de_evidencia(&run.evidence_dir) {
+pub fn verify(ctx: &mut Ctx) -> Outcome {
+    let destino = format!("evidence/{}/f1-lint.json", ctx.tracer.run_id());
+    if let Err(e) = tools::criar_dir_de_evidencia(&ctx.evidence_dir) {
         return Outcome::Fail(format!("{e:#}"));
     }
 
@@ -60,20 +60,20 @@ pub fn verify(run: &mut Run) -> Outcome {
     // errado nao melhora com o lint passando. Os defeitos dos dois sao juntados
     // e reportados de uma vez — quem abriu o PR precisa ver tudo agora, e nao
     // descobrir um problema novo a cada push.
-    let alvo = run.contrato.clone();
+    let alvo = ctx.contrato.clone();
     let mut defeitos = contrato::defeitos_do_caminho(&alvo);
-    match fs::read_to_string(run.cfg.root.join(&alvo)) {
+    match fs::read_to_string(ctx.cfg.root.join(&alvo)) {
         Ok(bruto) => defeitos.extend(contrato::defeitos_da_identidade(&alvo, &bruto)),
         Err(e) => defeitos.push(format!("contrato `{alvo}` ilegivel ({e})")),
     }
     for aviso in contrato::avisos_do_caminho(&alvo) {
-        run.note(format!("  aviso — {aviso}"));
+        ctx.note(format!("  aviso — {aviso}"));
     }
 
     // O exit code do CLI ja separa valido de invalido. Ainda assim o veredito
     // e lido do JSON: e ele que carrega o motivo, e um FAIL sem motivo nao e
     // evidencia de nada.
-    let saida = match run.datacontract(
+    let saida = match ctx.datacontract(
         "verify-lint",
         &[
             "lint",
@@ -88,7 +88,7 @@ pub fn verify(run: &mut Run) -> Outcome {
         Err(e) => return Outcome::Fail(format!("{e}")),
     };
 
-    let relatorio = run.cfg.root.join(&destino);
+    let relatorio = ctx.cfg.root.join(&destino);
     let bruto = match fs::read_to_string(&relatorio) {
         Ok(s) => s,
         Err(e) => {
@@ -104,7 +104,7 @@ pub fn verify(run: &mut Run) -> Outcome {
         Err(e) => return Outcome::Fail(format!("{e:#}")),
     };
 
-    run.note(format!(
+    ctx.note(format!(
         "lint {} — {} check(s), relatorio {destino}",
         if veredito.passed { "PASS" } else { "FAIL" },
         veredito.checks
@@ -125,25 +125,25 @@ pub fn verify(run: &mut Run) -> Outcome {
 
     if !defeitos.is_empty() {
         for d in &defeitos {
-            run.note(format!("  reprovado — {d}"));
+            ctx.note(format!("  reprovado — {d}"));
         }
         return Outcome::Fail(defeitos.join("; "));
     }
 
-    relatorio_legivel(run)
+    relatorio_legivel(ctx)
 }
 
 /// O relatorio que uma pessoa consegue abrir. Roda depois do veredito: o
 /// exportador tambem valida, e um contrato reprovado nao chega ate aqui.
-fn relatorio_legivel(run: &mut Run) -> Outcome {
-    let destino = format!("evidence/{}/f1-relatorio.html", run.tracer.run_id());
-    let alvo = run.contrato.clone();
-    match run.datacontract(
+fn relatorio_legivel(ctx: &mut Ctx) -> Outcome {
+    let destino = format!("evidence/{}/f1-relatorio.html", ctx.tracer.run_id());
+    let alvo = ctx.contrato.clone();
+    match ctx.datacontract(
         "verify-relatorio",
         &["export", "html", &alvo, "--output", &destino],
     ) {
         Ok(o) if o.ok() => {
-            run.note(format!("relatorio {destino}"));
+            ctx.note(format!("relatorio {destino}"));
             Outcome::Pass
         }
         // Lint aprovou e o exportador recusou: os dois validam o mesmo

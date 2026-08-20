@@ -9,6 +9,7 @@ use clap::{Parser, Subcommand};
 use harness::check;
 use harness::checks;
 use harness::config::Config;
+use harness::ctx::Ctx;
 use harness::exit::Exit;
 use harness::features::contrato;
 use harness::flow::{self, HaltReason, Outcome, Phase, Transition};
@@ -671,23 +672,28 @@ fn cmd_single(cfg: &Config, phase: Phase, escolha: Option<&str>) -> Result<i32> 
     let evidence_dir = cfg.evidence_dir().join(&run_id);
 
     let mut run = Run {
-        cfg: cfg.clone(),
+        // O que o dominio recebe emprestado. `step` e preenchido por `execute`
+        // antes de cada fase, a partir do progresso — aqui ele so nasce.
+        ctx: Ctx {
+            cfg: cfg.clone(),
+            tracer,
+            feature_id: feature.id.clone(),
+            contrato: contrato::resolver(&cfg.root, escolha)?,
+            evidence_dir,
+            tool_seq: 0,
+            step: 0,
+            notes: Vec::new(),
+            riscos: Vec::new(),
+        },
         features: features.clone(),
         progress: progress.clone(),
-        tracer,
-        feature_id: feature.id.clone(),
-        contrato: contrato::resolver(&cfg.root, escolha)?,
-        evidence_dir,
-        tool_seq: 0,
-        notes: Vec::new(),
         resultados: Vec::new(),
-        riscos: Vec::new(),
     };
     run.progress.run_id = Some(run_id.clone());
 
     // Envelope run_start/run_end tambem aqui: um arquivo de trace com formato
     // proprio viraria caso especial para a derivacao de metricas da Semana 3.
-    run.tracer.emit(
+    run.ctx.tracer.emit(
         "run_start",
         Draft {
             feature: Some(feature.id.clone()),
@@ -701,7 +707,7 @@ fn cmd_single(cfg: &Config, phase: Phase, escolha: Option<&str>) -> Result<i32> 
     // `phase_start` também aqui: a spec (seção 6) diz "entrada em cada fase", e
     // uma reexecução que emitisse só o `phase_end` deixaria um trace com um
     // formato para o laço e outro para o comando avulso.
-    run.tracer.emit(
+    run.ctx.tracer.emit(
         "phase_start",
         Draft {
             feature: Some(feature.id.clone()),
@@ -718,12 +724,12 @@ fn cmd_single(cfg: &Config, phase: Phase, escolha: Option<&str>) -> Result<i32> 
     run.resultados.push(format!("{phase}={label}"));
 
     println!("  {:<10} {}", phase.as_str(), label);
-    let notes = run.notes.join(" | ");
-    for n in run.notes.clone() {
+    let notes = run.ctx.notes.join(" | ");
+    for n in run.ctx.notes.clone() {
         println!("             {n}");
     }
 
-    run.tracer.emit(
+    run.ctx.tracer.emit(
         "phase_end",
         Draft {
             feature: Some(feature.id.clone()),
@@ -745,7 +751,7 @@ fn cmd_single(cfg: &Config, phase: Phase, escolha: Option<&str>) -> Result<i32> 
     features.save(&fl_path)?;
     run.progress.save(&pr_path)?;
 
-    println!("trace: {}", run.tracer.path().display());
+    println!("trace: {}", run.ctx.tracer.path().display());
 
     Ok(match outcome {
         Outcome::Pass => Exit::Pass.code(),
@@ -816,17 +822,20 @@ fn cmd_next(cfg: &Config, step_mode: bool, dry_run: bool, escolha: Option<&str>)
     let evidence_dir = cfg.evidence_dir().join(&run_id);
 
     let mut run = Run {
-        cfg: cfg.clone(),
+        ctx: Ctx {
+            cfg: cfg.clone(),
+            tracer,
+            feature_id: feature.id.clone(),
+            contrato: contrato::resolver(&cfg.root, escolha)?,
+            evidence_dir,
+            tool_seq: 0,
+            step: 0,
+            notes: Vec::new(),
+            riscos: Vec::new(),
+        },
         features,
         progress,
-        tracer,
-        feature_id: feature.id.clone(),
-        contrato: contrato::resolver(&cfg.root, escolha)?,
-        evidence_dir,
-        tool_seq: 0,
-        notes: Vec::new(),
         resultados: Vec::new(),
-        riscos: Vec::new(),
     };
 
     run.progress.run_id = Some(run_id.clone());
@@ -838,7 +847,7 @@ fn cmd_next(cfg: &Config, step_mode: bool, dry_run: bool, escolha: Option<&str>)
     }
 
     println!("feature {} — {}", feature.id, feature.title);
-    run.tracer.emit(
+    run.ctx.tracer.emit(
         "run_start",
         Draft {
             feature: Some(feature.id.clone()),
@@ -851,7 +860,7 @@ fn cmd_next(cfg: &Config, step_mode: bool, dry_run: bool, escolha: Option<&str>)
 
     loop {
         run.progress.current_phase = Some(phase);
-        run.tracer.emit(
+        run.ctx.tracer.emit(
             "phase_start",
             Draft {
                 feature: Some(feature.id.clone()),
@@ -875,12 +884,12 @@ fn cmd_next(cfg: &Config, step_mode: bool, dry_run: bool, escolha: Option<&str>)
         run.resultados.push(format!("{phase}={label}"));
 
         println!("  {:<10} {}", phase.as_str(), label);
-        let notes = run.notes.clone();
+        let notes = run.ctx.notes.clone();
         for n in &notes {
             println!("             {n}");
         }
 
-        run.tracer.emit(
+        run.ctx.tracer.emit(
             "phase_end",
             Draft {
                 feature: Some(feature.id.clone()),
@@ -928,7 +937,7 @@ fn cmd_next(cfg: &Config, step_mode: bool, dry_run: bool, escolha: Option<&str>)
                     }
                 }
 
-                run.tracer.emit(
+                run.ctx.tracer.emit(
                     event,
                     Draft {
                         feature: Some(feature.id.clone()),
@@ -943,7 +952,7 @@ fn cmd_next(cfg: &Config, step_mode: bool, dry_run: bool, escolha: Option<&str>)
                 persist(&run, &fl_path, &pr_path)?;
 
                 eprintln!("\n{message}");
-                eprintln!("trace: {}", run.tracer.path().display());
+                eprintln!("trace: {}", run.ctx.tracer.path().display());
                 return Ok(code.code());
             }
 
@@ -954,7 +963,7 @@ fn cmd_next(cfg: &Config, step_mode: bool, dry_run: bool, escolha: Option<&str>)
                 persist(&run, &fl_path, &pr_path)?;
 
                 println!("\nfeature {} concluida em {step_now} passos", feature.id);
-                println!("trace: {}", run.tracer.path().display());
+                println!("trace: {}", run.ctx.tracer.path().display());
                 return Ok(Exit::Pass.code());
             }
         }
@@ -962,7 +971,7 @@ fn cmd_next(cfg: &Config, step_mode: bool, dry_run: bool, escolha: Option<&str>)
 }
 
 fn emit_run_end(run: &mut Run, feature_id: &str, result: &str, step: u32) -> Result<()> {
-    run.tracer.emit(
+    run.ctx.tracer.emit(
         "run_end",
         Draft {
             feature: Some(feature_id.to_string()),

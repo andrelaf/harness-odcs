@@ -28,8 +28,7 @@
 use crate::config::Config;
 use crate::exit::Exit;
 use crate::features::{contrato, f1_validar, f4_gate};
-use crate::phases::Run;
-use crate::state::{FeatureList, Progress};
+use crate::ctx::Ctx;
 use crate::trace::{self, Draft, Tracer};
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
@@ -125,9 +124,10 @@ pub struct Relatorio {
 
 /// Executa a verificacao inteira e devolve o relatorio.
 ///
-/// Nao recebe `Progress` nem grava um: o estado e carregado so porque `Run`
-/// exige, e nunca persistido. Rodar `check` duas vezes em paralelo, em dois
-/// pull requests, nao produz disputa por arquivo de estado.
+/// Nao recebe `Progress` nem grava um — e agora nem sequer o **carrega**, por
+/// nao ter mais como: o que ele monta e um [`Ctx`], que nao tem onde guardar
+/// estado de fluxo. Rodar `check` duas vezes em paralelo, em dois pull
+/// requests, nao produz disputa por arquivo de estado.
 pub fn executar(cfg: &Config, escolha: Option<&str>) -> Result<Relatorio> {
     let alvo = contrato::resolver(&cfg.root, escolha)?;
 
@@ -136,23 +136,29 @@ pub fn executar(cfg: &Config, escolha: Option<&str>) -> Result<Relatorio> {
     let evidence_dir = cfg.evidence_dir().join(&run_id);
     crate::tools::criar_dir_de_evidencia(&evidence_dir)?;
 
-    let mut run = Run {
+    // `Ctx`, e nao `Run`: o `check` nunca precisou da maquina de estados.
+    //
+    // Ate a extracao do `Ctx` ele carregava `FeatureList` e `Progress` do disco
+    // so para preencher o struct, com um comentario admitindo que jamais os
+    // salvava. Duas leituras de arquivo e um comentario pedindo desculpa, no
+    // caminho que o CI executa em todo pull request.
+    //
+    // `step: 0` porque nao ha passo: `check` nao avanca feature, nao conta
+    // passo e nao fecha ciclo. O que correlaciona as invocacoes de ferramenta
+    // aqui e o `run_id`.
+    let mut ctx = Ctx {
         cfg: cfg.clone(),
-        // Carregado para satisfazer `Run`, jamais salvo. `check` nao avanca
-        // feature, nao conta passo e nao fecha ciclo.
-        features: FeatureList::load_or_seed(&cfg.feature_list_path())?,
-        progress: Progress::load_or_default(&cfg.progress_path())?,
         tracer,
         feature_id: "check".to_string(),
         contrato: alvo.clone(),
         evidence_dir,
         tool_seq: 0,
+        step: 0,
         notes: Vec::new(),
-        resultados: Vec::new(),
         riscos: Vec::new(),
     };
 
-    run.tracer.emit(
+    ctx.tracer.emit(
         "run_start",
         Draft {
             feature: Some("check".to_string()),
@@ -161,13 +167,13 @@ pub fn executar(cfg: &Config, escolha: Option<&str>) -> Result<Relatorio> {
         },
     )?;
 
-    let relatorio = montar(&mut run, &alvo)?;
+    let relatorio = montar(&mut ctx, &alvo)?;
 
     let destino = format!("evidence/{run_id}/report.json");
     let corpo = serde_json::to_string_pretty(&relatorio).context("serializando o relatorio")?;
     fs::write(cfg.root.join(&destino), &corpo).with_context(|| format!("escrevendo {destino}"))?;
 
-    run.tracer.emit(
+    ctx.tracer.emit(
         "run_end",
         Draft {
             feature: Some("check".to_string()),
@@ -324,8 +330,8 @@ pub fn caminho_do_relatorio(r: &Relatorio) -> String {
     format!("evidence/{}/report.json", r.run_id)
 }
 
-fn montar(run: &mut Run, alvo: &str) -> Result<Relatorio> {
-    let run_id = run.tracer.run_id().to_string();
+fn montar(ctx: &mut Ctx, alvo: &str) -> Result<Relatorio> {
+    let run_id = ctx.tracer.run_id().to_string();
     let mut defeitos: Vec<Defeito> = Vec::new();
 
     // --- 1. O nome, antes do container: e barato e nao depende de nada.
@@ -338,7 +344,7 @@ fn montar(run: &mut Run, alvo: &str) -> Result<Relatorio> {
     }
     let avisos = contrato::avisos_do_caminho(alvo);
 
-    let bruto = fs::read_to_string(run.cfg.root.join(alvo));
+    let bruto = fs::read_to_string(ctx.cfg.root.join(alvo));
     match &bruto {
         Ok(b) => {
             for m in contrato::defeitos_da_identidade(alvo, b) {
@@ -357,7 +363,7 @@ fn montar(run: &mut Run, alvo: &str) -> Result<Relatorio> {
     }
 
     // --- 2. O lint ODCS.
-    for m in lint(run, alvo, &run_id)? {
+    for m in lint(ctx, alvo, &run_id)? {
         defeitos.push(Defeito {
             etapa: "lint".to_string(),
             arquivo: alvo.to_string(),
@@ -373,7 +379,7 @@ fn montar(run: &mut Run, alvo: &str) -> Result<Relatorio> {
     }
 
     // --- 3. Mapeamento, classificacao, gate e enriquecimento.
-    let c = match f4_gate::compor(run, "check") {
+    let c = match f4_gate::compor(ctx, "check") {
         Ok(c) => c,
         Err(e) => {
             defeitos.push(Defeito {
@@ -395,7 +401,7 @@ fn montar(run: &mut Run, alvo: &str) -> Result<Relatorio> {
 
     // A proposta vai para `evidence/` — e de la que o CI monta a sugestao. Isto
     // tambem e o que permite lintar o contrato **enriquecido** logo abaixo.
-    if let Err(e) = f4_gate::gravar_proposta(run, &c) {
+    if let Err(e) = f4_gate::gravar_proposta(ctx, &c) {
         defeitos.push(Defeito {
             etapa: "classificacao".to_string(),
             arquivo: alvo.to_string(),
@@ -404,7 +410,7 @@ fn montar(run: &mut Run, alvo: &str) -> Result<Relatorio> {
         return Ok(fechado(run_id, alvo, defeitos, avisos));
     }
 
-    match f4_gate::lint_do_enriquecido(run) {
+    match f4_gate::lint_do_enriquecido(ctx) {
         Ok(falhas) => {
             for m in falhas {
                 defeitos.push(Defeito {
@@ -428,7 +434,7 @@ fn montar(run: &mut Run, alvo: &str) -> Result<Relatorio> {
         )),
         ..Default::default()
     };
-    match laudo_proposto(run, &c, &run_id) {
+    match laudo_proposto(ctx, &c, &run_id) {
         Ok((onde, destino)) => {
             propostas.laudo = Some(onde);
             propostas.laudo_destino = Some(destino);
@@ -444,13 +450,13 @@ fn montar(run: &mut Run, alvo: &str) -> Result<Relatorio> {
     // `check` produz — e aplicados dali, se alguem aceitar.
     let anexos = Anexos {
         proposta: serde_json::to_string_pretty(&c.proposta).unwrap_or_default(),
-        html: html_do_enriquecido(run, &run_id, &c.proposta.contrato_sha256),
+        html: html_do_enriquecido(ctx, &run_id, &c.proposta.contrato_sha256),
     };
     if let Some(destino) = &propostas.laudo_destino {
         let (p, h) = Anexos::destinos(destino);
         let base = format!("evidence/{run_id}");
         if fs::write(
-            run.cfg.root.join(format!("{base}/laudo.proposta.json")),
+            ctx.cfg.root.join(format!("{base}/laudo.proposta.json")),
             &anexos.proposta,
         )
         .is_ok()
@@ -459,7 +465,7 @@ fn montar(run: &mut Run, alvo: &str) -> Result<Relatorio> {
             propostas.anexo_proposta_destino = Some(p);
         }
         if let Some(corpo) = &anexos.html
-            && fs::write(run.cfg.root.join(format!("{base}/laudo.html")), corpo).is_ok()
+            && fs::write(ctx.cfg.root.join(format!("{base}/laudo.html")), corpo).is_ok()
         {
             propostas.anexo_html = Some(format!("{base}/laudo.html"));
             propostas.anexo_html_destino = Some(h);
@@ -475,7 +481,7 @@ fn montar(run: &mut Run, alvo: &str) -> Result<Relatorio> {
     // O laudo tem de ser versionado ao lado do contrato porque e ele que
     // responde "quem classificou este campo assim, e sob qual criterio". Um
     // laudo que so existiu num comentario de PR nao serve a auditoria nenhuma.
-    for m in aplicacao_pendente(run, &c, &propostas, &anexos) {
+    for m in aplicacao_pendente(ctx, &c, &propostas, &anexos) {
         defeitos.push(Defeito {
             etapa: "aplicacao".to_string(),
             arquivo: alvo.to_string(),
@@ -596,10 +602,10 @@ fn html_normalizado(bruto: &str, sha_do_contrato: &str) -> Option<String> {
 ///
 /// Falha nao reprova: um desenho ausente e menos grave que uma verificacao
 /// interrompida, e o veredito do contrato nao depende dele.
-fn html_do_enriquecido(run: &mut Run, run_id: &str, sha: &str) -> Option<String> {
-    let origem = f4_gate::caminho_do_enriquecido(run);
+fn html_do_enriquecido(ctx: &mut Ctx, run_id: &str, sha: &str) -> Option<String> {
+    let origem = f4_gate::caminho_do_enriquecido(ctx);
     let destino = format!("evidence/{run_id}/f4-contrato.html");
-    let saida = run
+    let saida = ctx
         .datacontract(
             "check-html",
             &["export", "html", &origem, "--output", &destino],
@@ -608,19 +614,19 @@ fn html_do_enriquecido(run: &mut Run, run_id: &str, sha: &str) -> Option<String>
     if !saida.ok() {
         return None;
     }
-    let bruto = fs::read_to_string(run.cfg.root.join(&destino)).ok()?;
+    let bruto = fs::read_to_string(ctx.cfg.root.join(&destino)).ok()?;
     html_normalizado(&bruto, sha)
 }
 
 fn aplicacao_pendente(
-    run: &Run,
+    ctx: &Ctx,
     c: &f4_gate::Composicao,
     propostas: &Propostas,
     anexos: &Anexos,
 ) -> Vec<String> {
     let mut faltas = Vec::new();
 
-    match fs::read_to_string(run.cfg.root.join(&c.proposta.contrato)) {
+    match fs::read_to_string(ctx.cfg.root.join(&c.proposta.contrato)) {
         Ok(atual) if atual == c.yaml_enriquecido => {}
         Ok(_) => faltas.push(format!(
             "o contrato nao esta com a classificacao aplicada — \
@@ -644,12 +650,12 @@ fn aplicacao_pendente(
     let corpo = propostas
         .laudo
         .as_deref()
-        .and_then(|p| fs::read_to_string(run.cfg.root.join(p)).ok());
+        .and_then(|p| fs::read_to_string(ctx.cfg.root.join(p)).ok());
     let Some(corpo) = corpo else {
         return faltas;
     };
 
-    match fs::read_to_string(run.cfg.root.join(destino)) {
+    match fs::read_to_string(ctx.cfg.root.join(destino)) {
         Ok(atual) if atual == corpo => {}
         Ok(_) => faltas.push(format!(
             "o laudo `{destino}` existe mas nao corresponde a este criterio. \
@@ -670,7 +676,7 @@ fn aplicacao_pendente(
         (h_dest, anexos.html.as_ref()),
     ] {
         let Some(esperado) = esperado else { continue };
-        match fs::read_to_string(run.cfg.root.join(&dest)) {
+        match fs::read_to_string(ctx.cfg.root.join(&dest)) {
             Ok(atual) if &atual == esperado => {}
             Ok(_) => faltas.push(format!("`{dest}` diverge do que esta verificacao produz")),
             Err(_) => faltas.push(format!(
@@ -683,7 +689,7 @@ fn aplicacao_pendente(
 }
 
 fn laudo_proposto(
-    run: &mut Run,
+    ctx: &mut Ctx,
     c: &f4_gate::Composicao,
     run_id: &str,
 ) -> Result<(String, String), String> {
@@ -698,13 +704,13 @@ fn laudo_proposto(
     let corpo = f4_gate::documento_do_laudo(&c.proposta, &c.laudo, &versao, &sha);
 
     let onde = format!("evidence/{run_id}/laudo.md");
-    fs::write(run.cfg.root.join(&onde), &corpo).map_err(|e| format!("escrevendo {onde}: {e}"))?;
+    fs::write(ctx.cfg.root.join(&onde), &corpo).map_err(|e| format!("escrevendo {onde}: {e}"))?;
     Ok((onde, destino))
 }
 
-fn lint(run: &mut Run, alvo: &str, run_id: &str) -> Result<Vec<String>> {
+fn lint(ctx: &mut Ctx, alvo: &str, run_id: &str) -> Result<Vec<String>> {
     let destino = format!("evidence/{run_id}/f1-lint.json");
-    let saida = run.datacontract(
+    let saida = ctx.datacontract(
         "check-lint",
         &[
             "lint",
@@ -716,7 +722,7 @@ fn lint(run: &mut Run, alvo: &str, run_id: &str) -> Result<Vec<String>> {
         ],
     )?;
 
-    let bruto = match fs::read_to_string(run.cfg.root.join(&destino)) {
+    let bruto = match fs::read_to_string(ctx.cfg.root.join(&destino)) {
         Ok(s) => s,
         Err(e) => {
             return Ok(vec![format!(

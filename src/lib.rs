@@ -7,6 +7,7 @@
 pub mod check;
 pub mod checks;
 pub mod config;
+pub mod ctx;
 pub mod exit;
 pub mod features;
 pub mod flow;

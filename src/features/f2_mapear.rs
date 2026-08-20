@@ -6,12 +6,12 @@
 //! Divisao entre as fases: `implement` **produz** o mapeamento e o grava como
 //! proposta; `verify` **refaz o mapeamento do zero** e julga integridade e
 //! cobertura. Verify nao le a proposta como insumo — recalcula a partir do
-//! contrato e do glossario, que e o que faz `./run.sh verify` valer sozinho.
+//! contrato e do glossario, que e o que faz `./ctx.sh verify` valer sozinho.
 //!
 //! Recalcular tem um efeito de graca: quando as duas fases rodaram no mesmo
 //! run, a comparacao byte a byte entre proposta e recomputacao so pode
-//! divergir se uma das entradas mudou no meio do run. E a pergunta que o hash
-//! do contrato responde em F1, respondida dentro de um unico run.
+//! divergir se uma das entradas mudou no meio do ctx. E a pergunta que o hash
+//! do contrato responde em F1, respondida dentro de um unico ctx.
 //!
 //! Nenhum modelo decide nada aqui. O casamento e deterministico: normaliza o
 //! nome do campo e procura a chave. Ambiguidade nao e resolvida, e **nomeada**
@@ -19,7 +19,7 @@
 
 use crate::features::contrato::{self, Campo};
 use crate::flow::Outcome;
-use crate::phases::Run;
+use crate::ctx::Ctx;
 use crate::tools;
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
@@ -34,23 +34,23 @@ const GLOSSARIO: &str = "glossary/glossario.yaml";
 // --- Fases -------------------------------------------------------------------
 
 /// Produz o mapeamento e o grava como proposta.
-pub fn implement(run: &mut Run) -> Outcome {
-    let mapeamento = match mapeamento_atual(run, "f2", "implement") {
+pub fn implement(ctx: &mut Ctx) -> Outcome {
+    let mapeamento = match mapeamento_atual(ctx, "f2", "implement") {
         Ok(m) => m,
         Err(e) => return Outcome::Fail(e),
     };
 
-    let destino = format!("evidence/{}/f2-mapeamento.json", run.tracer.run_id());
+    let destino = format!("evidence/{}/f2-mapeamento.json", ctx.tracer.run_id());
     let serializado = match serializar(&mapeamento) {
         Ok(s) => s,
         Err(e) => return Outcome::Fail(format!("serializando o mapeamento: {e:#}")),
     };
-    if let Err(e) = fs::write(run.cfg.root.join(&destino), &serializado) {
+    if let Err(e) = fs::write(ctx.cfg.root.join(&destino), &serializado) {
         return Outcome::Fail(format!("escrevendo {destino}: {e}"));
     }
 
     let r = &mapeamento.resumo;
-    run.note(format!(
+    ctx.note(format!(
         "{} campo(s) — {} mapeado(s), {} lacuna(s) — proposta em {destino}",
         r.campos, r.mapeados, r.lacunas
     ));
@@ -58,23 +58,23 @@ pub fn implement(run: &mut Run) -> Outcome {
 }
 
 /// Refaz o mapeamento e julga integridade e cobertura.
-pub fn verify(run: &mut Run) -> Outcome {
-    let campos = match contrato::extrair(run, "f2", "verify") {
+pub fn verify(ctx: &mut Ctx) -> Outcome {
+    let campos = match contrato::extrair(ctx, "f2", "verify") {
         Ok(c) => c,
         Err(e) => return Outcome::Fail(e),
     };
-    let (glossario, gloss_sha) = match glossario_do_disco(run) {
+    let (glossario, gloss_sha) = match glossario_do_disco(ctx) {
         Ok(g) => g,
         Err(e) => return Outcome::Fail(e),
     };
-    let contrato_sha = match contrato::sha(run) {
+    let contrato_sha = match contrato::sha(ctx) {
         Ok(s) => s,
         Err(e) => return Outcome::Fail(e),
     };
 
     let mut defeitos = defeitos_do_glossario(&glossario);
     let mapeamento = mapear(
-        &run.contrato.clone(),
+        &ctx.contrato.clone(),
         &campos,
         &glossario,
         &contrato_sha,
@@ -83,12 +83,12 @@ pub fn verify(run: &mut Run) -> Outcome {
     defeitos.extend(conferir_cobertura(&campos, &mapeamento, &glossario));
 
     // A comparacao com a proposta de `implement` so existe quando as duas
-    // fases rodaram no mesmo run. Rodando `verify` sozinho nao ha com o que
+    // fases rodaram no mesmo ctx. Rodando `verify` sozinho nao ha com o que
     // comparar — e a nota diz isso, em vez de omitir.
-    let proposta = run.evidence_dir.join("f2-mapeamento.json");
+    let proposta = ctx.evidence_dir.join("f2-mapeamento.json");
     let conferido = match (proposta.exists(), serializar(&mapeamento)) {
         (false, _) => {
-            run.note("sem proposta de `implement` neste run — nada a conferir".to_string());
+            ctx.note("sem proposta de `implement` neste run — nada a conferir".to_string());
             false
         }
         (true, Err(e)) => {
@@ -97,7 +97,7 @@ pub fn verify(run: &mut Run) -> Outcome {
         }
         (true, Ok(recomputado)) => match fs::read_to_string(&proposta) {
             Ok(gravado) if gravado == recomputado => {
-                run.note("recomputacao bate com a proposta de `implement`".to_string());
+                ctx.note("recomputacao bate com a proposta de `implement`".to_string());
                 true
             }
             Ok(_) => {
@@ -128,19 +128,19 @@ pub fn verify(run: &mut Run) -> Outcome {
             .collect(),
         defeitos: defeitos.clone(),
     };
-    if let Err(e) = gravar_veredito(run, &veredito) {
+    if let Err(e) = gravar_veredito(ctx, &veredito) {
         return Outcome::Fail(format!("{e:#}"));
     }
 
     let r = &mapeamento.resumo;
-    run.note(format!(
+    ctx.note(format!(
         "cobertura {}/{} campo(s) decidido(s) — {} mapeado(s), {} lacuna(s), glossario {}",
         r.campos, r.campos, r.mapeados, r.lacunas, mapeamento.glossario_versao
     ));
 
     if !defeitos.is_empty() {
         for d in &defeitos {
-            run.note(format!("  defeito — {d}"));
+            ctx.note(format!("  defeito — {d}"));
         }
         return Outcome::Fail(defeitos.join("; "));
     }
@@ -148,29 +148,29 @@ pub fn verify(run: &mut Run) -> Outcome {
     // Lacuna nao reprova: cobertura total aqui e de decisao, nao de acerto. O
     // relatorio para o humano e F4 — nomear os campos e o que F2 deve.
     if !veredito.lacunas.is_empty() {
-        run.note(format!(
+        ctx.note(format!(
             "lacuna(s) para F4: {}",
             veredito.lacunas.join(", ")
         ));
-        run.risco(format!(
+        ctx.risco(format!(
             "{} campo(s) sem termo no glossario: {}",
             veredito.lacunas.len(),
             veredito.lacunas.join(", ")
         ));
     }
 
-    relatorio_legivel(run, &mapeamento)
+    relatorio_legivel(ctx, &mapeamento)
 }
 
 /// A tabela que uma pessoa le sem ferramenta. Nasce em `verify`, depois do
 /// veredito, pelo mesmo motivo de F1: relatorio e comprovacao do julgamento,
 /// nao insumo dele.
-fn relatorio_legivel(run: &mut Run, m: &Mapeamento) -> Outcome {
-    let destino = format!("evidence/{}/f2-mapeamento.md", run.tracer.run_id());
-    if let Err(e) = fs::write(run.cfg.root.join(&destino), markdown(m)) {
+fn relatorio_legivel(ctx: &mut Ctx, m: &Mapeamento) -> Outcome {
+    let destino = format!("evidence/{}/f2-mapeamento.md", ctx.tracer.run_id());
+    if let Err(e) = fs::write(ctx.cfg.root.join(&destino), markdown(m)) {
         return Outcome::Fail(format!("escrevendo {destino}: {e}"));
     }
-    run.note(format!("relatorio {destino}"));
+    ctx.note(format!("relatorio {destino}"));
     Outcome::Pass
 }
 
@@ -182,9 +182,9 @@ fn relatorio_legivel(run: &mut Run, m: &Mapeamento) -> Outcome {
 ///
 /// `feature` entra no nome do artefato de evidencia porque quem chama nem
 /// sempre e F2.
-pub fn mapeamento_atual(run: &mut Run, feature: &str, fase: &str) -> Result<Mapeamento, String> {
-    let campos = contrato::extrair(run, feature, fase)?;
-    let (glossario, gloss_sha) = glossario_do_disco(run)?;
+pub fn mapeamento_atual(ctx: &mut Ctx, feature: &str, fase: &str) -> Result<Mapeamento, String> {
+    let campos = contrato::extrair(ctx, feature, fase)?;
+    let (glossario, gloss_sha) = glossario_do_disco(ctx)?;
 
     // Entrada inutilizavel para na preparacao: com alias colidindo entre dois
     // termos nao existe mapeamento a produzir, porque o harness nao escolhe
@@ -197,8 +197,8 @@ pub fn mapeamento_atual(run: &mut Run, feature: &str, fase: &str) -> Result<Mape
         ));
     }
 
-    let contrato_sha = contrato::sha(run)?;
-    run.note(format!(
+    let contrato_sha = contrato::sha(ctx)?;
+    ctx.note(format!(
         "glossario {} v{} — {} termo(s), sha256 {}",
         GLOSSARIO,
         glossario.version,
@@ -206,7 +206,7 @@ pub fn mapeamento_atual(run: &mut Run, feature: &str, fase: &str) -> Result<Mape
         &gloss_sha[..16]
     ));
     Ok(mapear(
-        &run.contrato.clone(),
+        &ctx.contrato.clone(),
         &campos,
         &glossario,
         &contrato_sha,
@@ -216,8 +216,8 @@ pub fn mapeamento_atual(run: &mut Run, feature: &str, fase: &str) -> Result<Mape
 
 /// O glossario do disco, com o sha256 do que foi lido. Publica porque F3
 /// tambem precisa saber contra qual vocabulario esta trabalhando.
-pub fn glossario_do_disco(run: &Run) -> Result<(Glossario, String), String> {
-    let path = run.cfg.vocab.join(GLOSSARIO);
+pub fn glossario_do_disco(ctx: &Ctx) -> Result<(Glossario, String), String> {
+    let path = ctx.cfg.vocab.join(GLOSSARIO);
     let bruto = fs::read_to_string(&path).map_err(|e| {
         format!(
             "glossario `{GLOSSARIO}` ilegivel em {} ({e})",
@@ -228,12 +228,12 @@ pub fn glossario_do_disco(run: &Run) -> Result<(Glossario, String), String> {
     Ok((glossario, tools::sha256_hex(&bruto)))
 }
 
-fn gravar_veredito(run: &mut Run, v: &Veredito) -> Result<()> {
-    let destino = format!("evidence/{}/f2-cobertura.json", run.tracer.run_id());
+fn gravar_veredito(ctx: &mut Ctx, v: &Veredito) -> Result<()> {
+    let destino = format!("evidence/{}/f2-cobertura.json", ctx.tracer.run_id());
     let corpo = serde_json::to_string_pretty(v).context("serializando o veredito")?;
-    fs::write(run.cfg.root.join(&destino), corpo)
+    fs::write(ctx.cfg.root.join(&destino), corpo)
         .with_context(|| format!("escrevendo {destino}"))?;
-    run.note(format!("veredito {destino}"));
+    ctx.note(format!("veredito {destino}"));
     Ok(())
 }
 

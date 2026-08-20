@@ -1,0 +1,40 @@
+{
+  "runId": "c1ed8d6d-5e3b-40f1-a7c8-166b7dda1e88",
+  "datacontractCliVersion": "1.1.0",
+  "dataContractId": "clientes",
+  "dataContractVersion": "1.0.0",
+  "dataProductId": null,
+  "outputPortId": null,
+  "server": null,
+  "filters": null,
+  "timestampStart": "2026-08-20T12:31:34.396320Z",
+  "timestampEnd": "2026-08-20T12:31:34.573145Z",
+  "result": "passed",
+  "checks": [
+    {
+      "id": null,
+      "key": null,
+      "category": null,
+      "type": "lint",
+      "name": "Data contract is syntactically valid",
+      "model": null,
+      "field": null,
+      "quality_id": null,
+      "tags": null,
+      "engine": "datacontract",
+      "language": null,
+      "implementation": null,
+      "result": "passed",
+      "reason": null,
+      "diagnostics": null,
+      "failed_samples": null
+    }
+  ],
+  "logs": [
+    {
+      "level": "INFO",
+      "message": "Linting data contract",
+      "timestamp": "2026-08-20T12:31:34.396372Z"
+    }
+  ]
+}

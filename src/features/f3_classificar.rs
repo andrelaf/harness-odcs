@@ -23,7 +23,7 @@
 
 use crate::features::f2_mapear::{self, Mapeamento};
 use crate::flow::Outcome;
-use crate::phases::Run;
+use crate::ctx::Ctx;
 use crate::tools;
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
@@ -38,23 +38,23 @@ const CATALOGO: &str = "classification/catalogo-lgpd.yaml";
 // --- Fases -------------------------------------------------------------------
 
 /// Classifica e grava a proposta.
-pub fn implement(run: &mut Run) -> Outcome {
-    let laudo = match laudo_atual(run, "f3", "implement") {
+pub fn implement(ctx: &mut Ctx) -> Outcome {
+    let laudo = match laudo_atual(ctx, "f3", "implement") {
         Ok(c) => c.laudo,
         Err(e) => return Outcome::Fail(e),
     };
 
-    let destino = format!("evidence/{}/f3-classificacao.json", run.tracer.run_id());
+    let destino = format!("evidence/{}/f3-classificacao.json", ctx.tracer.run_id());
     let serializado = match serializar(&laudo) {
         Ok(s) => s,
         Err(e) => return Outcome::Fail(format!("serializando a classificacao: {e:#}")),
     };
-    if let Err(e) = fs::write(run.cfg.root.join(&destino), &serializado) {
+    if let Err(e) = fs::write(ctx.cfg.root.join(&destino), &serializado) {
         return Outcome::Fail(format!("escrevendo {destino}: {e}"));
     }
 
     let r = &laudo.resumo;
-    run.note(format!(
+    ctx.note(format!(
         "{} campo(s) — {} classificado(s), {} nao classificado(s); {} pii, {} sensivel \
          — proposta em {destino}",
         r.campos, r.classificados, r.nao_classificados, r.pii, r.sensivel
@@ -63,16 +63,16 @@ pub fn implement(run: &mut Run) -> Outcome {
 }
 
 /// Refaz a classificacao e julga integridade e cobertura.
-pub fn verify(run: &mut Run) -> Outcome {
-    let mapeamento = match f2_mapear::mapeamento_atual(run, "f3", "verify") {
+pub fn verify(ctx: &mut Ctx) -> Outcome {
+    let mapeamento = match f2_mapear::mapeamento_atual(ctx, "f3", "verify") {
         Ok(m) => m,
         Err(e) => return Outcome::Fail(e),
     };
-    let (glossario, _) = match f2_mapear::glossario_do_disco(run) {
+    let (glossario, _) = match f2_mapear::glossario_do_disco(ctx) {
         Ok(g) => g,
         Err(e) => return Outcome::Fail(e),
     };
-    let (catalogo, cat_sha) = match catalogo_do_disco(run) {
+    let (catalogo, cat_sha) = match catalogo_do_disco(ctx) {
         Ok(c) => c,
         Err(e) => return Outcome::Fail(e),
     };
@@ -82,12 +82,12 @@ pub fn verify(run: &mut Run) -> Outcome {
     defeitos.extend(conferir_cobertura(&mapeamento, &laudo, &catalogo));
 
     // A comparacao com a proposta de `implement` so existe quando as duas
-    // fases rodaram no mesmo run. Rodando `verify` sozinho nao ha com o que
+    // fases rodaram no mesmo ctx. Rodando `verify` sozinho nao ha com o que
     // comparar — e a nota diz isso, em vez de omitir.
-    let proposta = run.evidence_dir.join("f3-classificacao.json");
+    let proposta = ctx.evidence_dir.join("f3-classificacao.json");
     let conferido = match (proposta.exists(), serializar(&laudo)) {
         (false, _) => {
-            run.note("sem proposta de `implement` neste run — nada a conferir".to_string());
+            ctx.note("sem proposta de `implement` neste run — nada a conferir".to_string());
             false
         }
         (true, Err(e)) => {
@@ -96,7 +96,7 @@ pub fn verify(run: &mut Run) -> Outcome {
         }
         (true, Ok(recomputado)) => match fs::read_to_string(&proposta) {
             Ok(gravado) if gravado == recomputado => {
-                run.note("recomputacao bate com a proposta de `implement`".to_string());
+                ctx.note("recomputacao bate com a proposta de `implement`".to_string());
                 true
             }
             Ok(_) => {
@@ -128,12 +128,12 @@ pub fn verify(run: &mut Run) -> Outcome {
             .collect(),
         defeitos: defeitos.clone(),
     };
-    if let Err(e) = gravar_veredito(run, &veredito) {
+    if let Err(e) = gravar_veredito(ctx, &veredito) {
         return Outcome::Fail(format!("{e:#}"));
     }
 
     let r = &laudo.resumo;
-    run.note(format!(
+    ctx.note(format!(
         "cobertura {}/{} campo(s) decidido(s) — {} pii, {} sensivel, {} nao classificado(s); \
          niveis {} — catalogo {}",
         r.campos,
@@ -147,32 +147,32 @@ pub fn verify(run: &mut Run) -> Outcome {
 
     if !defeitos.is_empty() {
         for d in &defeitos {
-            run.note(format!("  defeito — {d}"));
+            ctx.note(format!("  defeito — {d}"));
         }
         return Outcome::Fail(defeitos.join("; "));
     }
 
     if !veredito.nao_classificados.is_empty() {
-        run.note(format!(
+        ctx.note(format!(
             "sem classificacao, para F4: {}",
             veredito.nao_classificados.join(", ")
         ));
-        run.risco(format!(
+        ctx.risco(format!(
             "{} campo(s) sem classificacao, encaminhados ao gate de F4: {}",
             veredito.nao_classificados.len(),
             veredito.nao_classificados.join(", ")
         ));
     }
 
-    relatorio_legivel(run, &laudo)
+    relatorio_legivel(ctx, &laudo)
 }
 
-fn relatorio_legivel(run: &mut Run, l: &Laudo) -> Outcome {
-    let destino = format!("evidence/{}/f3-classificacao.md", run.tracer.run_id());
-    if let Err(e) = fs::write(run.cfg.root.join(&destino), markdown(l)) {
+fn relatorio_legivel(ctx: &mut Ctx, l: &Laudo) -> Outcome {
+    let destino = format!("evidence/{}/f3-classificacao.md", ctx.tracer.run_id());
+    if let Err(e) = fs::write(ctx.cfg.root.join(&destino), markdown(l)) {
         return Outcome::Fail(format!("escrevendo {destino}: {e}"));
     }
-    run.note(format!("relatorio {destino}"));
+    ctx.note(format!("relatorio {destino}"));
     Outcome::Pass
 }
 
@@ -194,13 +194,13 @@ pub struct Classificacao {
 /// por aqui, e F4 tambem: e assim que o enriquecimento chega a decisao do
 /// catalogo sem depender da evidencia de um run anterior. Mesmo papel que
 /// `f2_mapear::mapeamento_atual` cumpre para F3.
-pub fn laudo_atual(run: &mut Run, feature: &str, fase: &str) -> Result<Classificacao, String> {
+pub fn laudo_atual(ctx: &mut Ctx, feature: &str, fase: &str) -> Result<Classificacao, String> {
     // Recomputa o mapeamento em vez de ler `evidence/` de um run anterior:
     // assim as garantias de F2 valem dentro de F3, e a cadeia
-    // contrato -> termo -> classificacao e reconstruida inteira a cada run.
-    let mapeamento = f2_mapear::mapeamento_atual(run, feature, fase)?;
-    let (glossario, _) = f2_mapear::glossario_do_disco(run)?;
-    let (catalogo, cat_sha) = catalogo_do_disco(run)?;
+    // contrato -> termo -> classificacao e reconstruida inteira a cada ctx.
+    let mapeamento = f2_mapear::mapeamento_atual(ctx, feature, fase)?;
+    let (glossario, _) = f2_mapear::glossario_do_disco(ctx)?;
+    let (catalogo, cat_sha) = catalogo_do_disco(ctx)?;
 
     // Entrada inutilizavel para na preparacao; resultado ruim e que e julgado
     // em `verify`. Mesma linha de F1 e F2.
@@ -212,7 +212,7 @@ pub fn laudo_atual(run: &mut Run, feature: &str, fase: &str) -> Result<Classific
         ));
     }
 
-    run.note(format!(
+    ctx.note(format!(
         "catalogo {} v{} — {} termo(s) classificado(s), sha256 {}",
         CATALOGO,
         catalogo.version,
@@ -227,20 +227,20 @@ pub fn laudo_atual(run: &mut Run, feature: &str, fase: &str) -> Result<Classific
     })
 }
 
-fn catalogo_do_disco(run: &Run) -> Result<(Catalogo, String), String> {
-    let path = run.cfg.vocab.join(CATALOGO);
+fn catalogo_do_disco(ctx: &Ctx) -> Result<(Catalogo, String), String> {
+    let path = ctx.cfg.vocab.join(CATALOGO);
     let bruto = fs::read_to_string(&path)
         .map_err(|e| format!("catalogo `{CATALOGO}` ilegivel em {} ({e})", path.display()))?;
     let catalogo = carregar_catalogo(&bruto).map_err(|e| format!("{e:#}"))?;
     Ok((catalogo, tools::sha256_hex(&bruto)))
 }
 
-fn gravar_veredito(run: &mut Run, v: &Veredito) -> Result<()> {
-    let destino = format!("evidence/{}/f3-cobertura.json", run.tracer.run_id());
+fn gravar_veredito(ctx: &mut Ctx, v: &Veredito) -> Result<()> {
+    let destino = format!("evidence/{}/f3-cobertura.json", ctx.tracer.run_id());
     let corpo = serde_json::to_string_pretty(v).context("serializando o veredito")?;
-    fs::write(run.cfg.root.join(&destino), corpo)
+    fs::write(ctx.cfg.root.join(&destino), corpo)
         .with_context(|| format!("escrevendo {destino}"))?;
-    run.note(format!("veredito {destino}"));
+    ctx.note(format!("veredito {destino}"));
     Ok(())
 }
 
@@ -444,7 +444,7 @@ pub struct Resumo {
 /// A proposta de classificacao.
 ///
 /// **Sem `run_id` e sem timestamp**, deliberadamente: o mesmo contrato com o
-/// mesmo glossario e o mesmo catalogo produz o mesmo arquivo em qualquer run.
+/// mesmo glossario e o mesmo catalogo produz o mesmo arquivo em qualquer ctx.
 /// E o que torna dois runs comparaveis com `diff` e o que permite a `verify`
 /// conferir a recomputacao byte a byte.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
