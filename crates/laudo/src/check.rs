@@ -119,7 +119,34 @@ pub struct Relatorio {
     pub avisos: Vec<String>,
     pub gate_sha256: Option<String>,
     pub gate: Vec<f4_gate::ItemDeGate>,
+    /// O vocabulario disponivel, **so quando ha lacuna**.
+    ///
+    /// Quem escreve contrato descobre a lacuna aqui, no pull request, e ate
+    /// entao nomeava campo no escuro: o relatorio dizia que nao casou e nada
+    /// sobre o que existia. Isto e a resposta a "como eu deveria ter chamado
+    /// este campo?" entregue onde a pergunta aparece.
+    ///
+    /// Vazio quando nao ha lacuna, e por isso `skip_serializing_if`: o
+    /// `report.json` do caso comum nao carrega o vocabulario inteiro.
+    ///
+    /// **Nao e sugestao.** E a lista do que existe, na ordem do arquivo —
+    /// ordenar por semelhanca com o campo que falhou seria palpite, e o binario
+    /// promete nunca resolver ambiguidade sozinho. Aproximar e trabalho de
+    /// quem le, ou de um plugin que proponha e deixe o `check` julgar.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub vocabulario: Vec<TermoDisponivel>,
     pub propostas: Propostas,
+}
+
+/// Um termo do glossario, reduzido ao que ajuda a nomear um campo.
+///
+/// `aliases` e a parte util: o `id` diz o que o termo significa, e os aliases
+/// dizem como escreve-lo para que o casamento aconteca.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TermoDisponivel {
+    pub id: String,
+    pub nome: String,
+    pub aliases: Vec<String>,
 }
 
 /// Executa a verificacao inteira e devolve o relatorio.
@@ -514,6 +541,7 @@ fn montar(ctx: &mut Ctx, alvo: &str) -> Result<Relatorio> {
         avisos,
         gate_sha256: Some(c.proposta.gate_sha256.clone()),
         gate: c.proposta.gate.clone(),
+        vocabulario: vocabulario_se_houver_lacuna(&c),
         propostas,
     })
 }
@@ -616,6 +644,36 @@ fn html_do_enriquecido(ctx: &mut Ctx, run_id: &str, sha: &str) -> Option<String>
     }
     let bruto = fs::read_to_string(ctx.cfg.root.join(&destino)).ok()?;
     html_normalizado(&bruto, sha)
+}
+
+/// O vocabulario disponivel, e **so** quando ha ao menos uma lacuna.
+///
+/// A condicao nao e economia de bytes: e o que impede o relatorio do caso comum
+/// — nenhuma lacuna — de carregar um despejo de catalogo que ninguem pediu. Com
+/// 27 termos ja seriam 27 linhas em todo pull request que nao tem pergunta
+/// nenhuma a fazer.
+///
+/// Reclassificacao e conflito nao contam. Nos dois o campo **tem** termo; o que
+/// falta e decidir entre duas respostas, e listar o vocabulario nao ajuda em
+/// nada a decidir isso.
+fn vocabulario_se_houver_lacuna(c: &f4_gate::Composicao) -> Vec<TermoDisponivel> {
+    let ha_lacuna = c
+        .proposta
+        .gate
+        .iter()
+        .any(|i| i.tipo == f4_gate::TipoDeGate::Lacuna);
+    if !ha_lacuna {
+        return Vec::new();
+    }
+    c.glossario
+        .termos
+        .iter()
+        .map(|t| TermoDisponivel {
+            id: t.id.clone(),
+            nome: t.nome.clone(),
+            aliases: t.aliases.clone(),
+        })
+        .collect()
 }
 
 fn aplicacao_pendente(
@@ -764,6 +822,10 @@ fn fechado(run_id: String, alvo: &str, defeitos: Vec<Defeito>, avisos: Vec<Strin
         avisos,
         gate_sha256: None,
         gate: Vec::new(),
+        // Parou antes de classificar, entao nao ha lacuna a responder: o
+        // problema e outro, e listar vocabulario aqui seria ruido no meio de um
+        // defeito de schema ou de nome de arquivo.
+        vocabulario: Vec::new(),
         propostas: Propostas::default(),
     }
 }
@@ -920,6 +982,45 @@ pub fn markdown(r: &Relatorio, laudo: Option<&str>) -> String {
             "\nO harness nao libera isto. Destrava com revisao aprovada de CODEOWNER **no \
              SHA atual** — qualquer push novo derruba a aprovacao e o pedido e recalculado.\n\n",
         );
+
+        // O vocabulario, quando ha lacuna. Dentro de `<details>` porque a
+        // resposta certa e "disponivel, nao empurrada": quem ja sabe o nome do
+        // termo nao precisa rolar por 27 linhas, e quem nao sabe esta a um
+        // clique — sem trocar de aba, sem instalar nada.
+        if !r.vocabulario.is_empty() {
+            s.push_str(&format!(
+                "<details>\n<summary><b>Vocabulario disponivel</b> — {} termo(s), glossario v{}</summary>\n\n",
+                r.vocabulario.len(),
+                r.glossario_versao.as_deref().unwrap_or("?")
+            ));
+            s.push_str("| Termo | Nome | Como escrever no contrato |\n|---|---|---|\n");
+            for t in &r.vocabulario {
+                s.push_str(&format!(
+                    "| `{}` | {} | {} |\n",
+                    t.id,
+                    t.nome,
+                    if t.aliases.is_empty() {
+                        "— (so pelo proprio id)".to_string()
+                    } else {
+                        t.aliases
+                            .iter()
+                            .map(|a| format!("`{a}`"))
+                            .collect::<Vec<_>>()
+                            .join(", ")
+                    }
+                ));
+            }
+            s.push_str(
+                "\nA terceira coluna e o que faz o campo casar. Maiuscula, acento, ponto, \
+                 hifen e `_` sao ignorados na comparacao — `nome_completo`, `NomeCompleto` e \
+                 `nome.completo` sao a mesma chave. O que **nao** casa e nome parecido: \
+                 `cpf_cliente` nao encontra `cpf`.\n\n\
+                 Nenhum termo serve? Entao a lacuna e real, e se resolve ampliando o \
+                 vocabulario — ou aceitando, por decisao registrada, que o campo siga sem \
+                 classificacao.\n\n",
+            );
+            s.push_str("</details>\n\n");
+        }
     }
 
     for a in &r.avisos {
@@ -973,6 +1074,18 @@ pub fn imprimir(r: &Relatorio) {
             println!("              {}", i.linha());
         }
         println!("            libera com revisao de CODEOWNER no SHA atual");
+        // No terminal, o ponteiro e nao a lista: 27 termos empurrariam o
+        // veredito para fora da tela, que e a unica linha que quem roda `check`
+        // esta olhando. A lista inteira vai no comentario do pull request, onde
+        // cabe dentro de um `<details>`, e no `report.json`.
+        if !r.vocabulario.is_empty() {
+            println!(
+                "  vocabulario {} termo(s) no glossario v{} — a lista esta no relatorio \
+                 (`report --formato markdown`)",
+                r.vocabulario.len(),
+                r.glossario_versao.as_deref().unwrap_or("?")
+            );
+        }
     }
     if let Some(p) = &r.propostas.contrato {
         println!("proposta   {p}");
@@ -1002,6 +1115,7 @@ mod tests {
             avisos: Vec::new(),
             gate_sha256: None,
             gate: Vec::new(),
+            vocabulario: Vec::new(),
             propostas: Propostas::default(),
         }
     }
@@ -1110,5 +1224,80 @@ mod tests {
         assert!(s.contains("CODEOWNER"), "{s}");
         assert!(s.contains("SHA atual"), "{s}");
         assert!(s.contains("4f773bab5f6e400f"), "{s}");
+    }
+
+    fn com_lacuna() -> Relatorio {
+        let mut r = base(Veredito::Bloqueado);
+        r.glossario_versao = Some("1.1.0".to_string());
+        r.gate.push(crate::features::f4_gate::ItemDeGate {
+            tipo: crate::features::f4_gate::TipoDeGate::Lacuna,
+            campo: "sobrenome".to_string(),
+            detalhe: "campo sem termo no glossario".to_string(),
+        });
+        r
+    }
+
+    /// Quem tem lacuna precisa saber **o que existe**, e os aliases sao a
+    /// resposta pratica: o `id` diz o significado, o alias diz como escrever
+    /// para casar.
+    #[test]
+    fn lacuna_traz_o_vocabulario_e_os_aliases_no_comentario() {
+        let mut r = com_lacuna();
+        r.vocabulario.push(TermoDisponivel {
+            id: "pessoa.nome_completo".to_string(),
+            nome: "Nome completo".to_string(),
+            aliases: vec!["nome_completo".to_string(), "nome_civil".to_string()],
+        });
+        let s = markdown(&r, None);
+        assert!(s.contains("Vocabulario disponivel"), "{s}");
+        assert!(s.contains("glossario v1.1.0"), "{s}");
+        assert!(s.contains("`pessoa.nome_completo`"), "{s}");
+        assert!(s.contains("`nome_civil`"), "{s}");
+    }
+
+    /// Dentro de `<details>`: disponivel, nao empurrado. Quem ja sabe o nome do
+    /// termo nao deveria rolar por dezenas de linhas para chegar no resto.
+    #[test]
+    fn o_vocabulario_vai_recolhido() {
+        let mut r = com_lacuna();
+        r.vocabulario.push(TermoDisponivel {
+            id: "contato.email".to_string(),
+            nome: "Endereco de e-mail".to_string(),
+            aliases: vec!["email".to_string()],
+        });
+        let s = markdown(&r, None);
+        assert!(s.contains("<details>") && s.contains("</details>"), "{s}");
+    }
+
+    /// A condicao que impede o despejo de catalogo no caso comum: sem lacuna, o
+    /// comentario nao carrega vocabulario nenhum.
+    #[test]
+    fn sem_lacuna_o_comentario_nao_carrega_vocabulario() {
+        let r = base(Veredito::Pass);
+        assert!(r.vocabulario.is_empty());
+        let s = markdown(&r, None);
+        assert!(!s.contains("Vocabulario disponivel"), "{s}");
+    }
+
+    /// Termo sem alias casa so pelo proprio `id`, e a coluna precisa dizer isso
+    /// em vez de ficar em branco — celula vazia parece defeito de renderizacao.
+    #[test]
+    fn termo_sem_alias_diz_que_casa_pelo_id() {
+        let mut r = com_lacuna();
+        r.vocabulario.push(TermoDisponivel {
+            id: "perfil.segmento".to_string(),
+            nome: "Segmento comercial".to_string(),
+            aliases: Vec::new(),
+        });
+        let s = markdown(&r, None);
+        assert!(s.contains("so pelo proprio id"), "{s}");
+    }
+
+    /// O `report.json` do caso comum nao deve engordar com um campo vazio.
+    #[test]
+    fn vocabulario_vazio_nao_entra_no_json() {
+        let r = base(Veredito::Pass);
+        let json = serde_json::to_string(&r).unwrap();
+        assert!(!json.contains("vocabulario"), "{json}");
     }
 }

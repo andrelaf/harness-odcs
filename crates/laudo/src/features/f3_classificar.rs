@@ -22,7 +22,7 @@
 //! `evidence/` de um run anterior. Evidencia e saida, nunca entrada.
 
 use crate::ctx::Ctx;
-use crate::features::f2_mapear::{self, Mapeamento};
+use crate::features::f2_mapear::{self, Glossario, Mapeamento};
 use crate::outcome::Outcome;
 use crate::tools;
 use anyhow::{Context, Result};
@@ -185,6 +185,13 @@ fn relatorio_legivel(ctx: &mut Ctx, l: &Laudo) -> Outcome {
 pub struct Classificacao {
     pub laudo: Laudo,
     pub catalogo: Catalogo,
+    /// O vocabulario que julgou, carregado inteiro.
+    ///
+    /// Ja era lido aqui para validar a integridade do catalogo e descartado em
+    /// seguida. Segue adiante porque quem tem uma **lacuna** precisa saber o
+    /// que existe — e os `aliases` sao a resposta pratica a "como eu deveria
+    /// ter chamado este campo?".
+    pub glossario: Glossario,
     /// Devolvido junto para que F4 nao precise reextrair os campos do contrato
     /// — seria uma segunda chamada ao container por fase, pelo mesmo resultado.
     pub mapeamento: Mapeamento,
@@ -224,6 +231,7 @@ pub fn laudo_atual(ctx: &mut Ctx, feature: &str, fase: &str) -> Result<Classific
         laudo,
         catalogo,
         mapeamento,
+        glossario,
     })
 }
 
@@ -741,7 +749,7 @@ mod tests {
     /// resolvido por run, o valor entra por parametro tambem aqui.
     const ALVO: &str = "contracts/clientes/contract.odcs.yaml";
     use crate::features::contrato::Campo;
-    use crate::features::f2_mapear::{Glossario, carregar_glossario, mapear};
+    use crate::features::f2_mapear::{carregar_glossario, mapear};
 
     fn glossario() -> Glossario {
         carregar_glossario(

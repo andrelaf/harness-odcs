@@ -33,11 +33,21 @@ dono e o segundo pin no pipeline. Ver [`docs/distribuicao.md`](docs/distribuicao
 
 ## Reduz atrito de quem escreve contrato — no pull request, que é onde ele está
 
-**O laudo aponta o vocabulário disponível quando houver lacuna.** Hoje o item de
-gate diz `campo sem termo no glossario — segue sem classificacao`
-(`crates/laudo/src/features/f4_gate.rs:1034`): nomeia a ausência e não diz nada sobre o
-vocabulário que existe. Quem lê o comentário descobre que errou e continua sem
-saber o que estava disponível.
+> **Entregue.** O comentário do pull request passou a trazer o vocabulário
+> disponível — `id`, nome e **aliases** — quando há lacuna, dentro de um
+> `<details>` para ficar disponível sem ser empurrado. No terminal fica o
+> ponteiro; a lista inteira vai no comentário e no `report.json`.
+>
+> A dose acabou sendo a lista, e não o ponteiro que eu previa aqui: os aliases
+> são a resposta prática a *"como eu deveria ter chamado este campo?"*, e um
+> ponteiro para o glossário não os entrega. A condição `só quando há lacuna` é
+> o que impede o despejo de catálogo no caso comum.
+
+**O texto abaixo é o registro do problema, de antes da entrega.** O item de gate
+dizia `campo sem termo no glossario — segue sem classificacao`
+(`crates/laudo/src/features/f4_gate.rs:1034`): nomeava a ausência e não dizia nada
+sobre o vocabulário que existe. Quem lia o comentário descobria que errou e
+continuava sem saber o que estava disponível.
 
 É o mesmo dado que o `termos` imprimiria, entregue onde a pessoa já está lendo —
 sem instalação, sem pacote novo por plataforma, sem depender do plugin. E não

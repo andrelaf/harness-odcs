@@ -21,7 +21,7 @@
 use crate::ctx::Ctx;
 use crate::features::contrato;
 use crate::features::f1_validar;
-use crate::features::f2_mapear::Mapeamento;
+use crate::features::f2_mapear::{Glossario, Mapeamento};
 use crate::features::f3_classificar::{
     self, CampoClassificado, Catalogo, Laudo, Situacao, niveis_legivel, sim_nao,
 };
@@ -272,6 +272,8 @@ pub(crate) struct Composicao {
     mapeamento: Mapeamento,
     pub(crate) laudo: Laudo,
     catalogo: Catalogo,
+    /// O vocabulario inteiro, para responder a quem tem lacuna o que existe.
+    pub(crate) glossario: Glossario,
     pub(crate) proposta: Proposta,
     /// O contrato como ficaria. Ainda nao escrito em `contracts/`.
     pub(crate) yaml_enriquecido: String,
@@ -281,7 +283,7 @@ pub(crate) struct Composicao {
 
 pub(crate) fn compor(ctx: &mut Ctx, fase: &str) -> Result<Composicao, String> {
     let c = f3_classificar::laudo_atual(ctx, "f4", fase)?;
-    let (laudo, catalogo, mapeamento) = (c.laudo, c.catalogo, c.mapeamento);
+    let (laudo, catalogo, mapeamento, glossario) = (c.laudo, c.catalogo, c.mapeamento, c.glossario);
 
     let alvo = ctx.contrato.clone();
     let path = ctx.cfg.root.join(&alvo);
@@ -316,6 +318,7 @@ pub(crate) fn compor(ctx: &mut Ctx, fase: &str) -> Result<Composicao, String> {
         mapeamento,
         laudo,
         catalogo,
+        glossario,
         proposta,
         yaml_enriquecido,
         nao_aplicados,
