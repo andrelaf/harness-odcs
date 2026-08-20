@@ -1,9 +1,14 @@
-# O pacote de validacao, baixado. Fixado em `harness.lock`, nunca commitado:
-# um binario no repositorio de contratos seria uma segunda fonte de verdade
-# sobre qual criterio julga, competindo com o pin.
+# Os pacotes de validacao, baixados. Fixados em `harness.lock`, nunca
+# commitados: um binario no repositorio de contratos seria uma segunda fonte de
+# verdade sobre qual criterio julga, competindo com o pin.
 /.harness/
 /.harness-download/
 /.harness-tmp/
+
+# O vocabulario, baixado. Vale o mesmo, e com um agravante proprio: uma copia
+# do glossario commitada aqui seria quem escreve o contrato guardando o
+# criterio que o julga.
+/.harness-vocab/
 
 # Saida das ferramentas e rastro de execucao. No pipeline sao **artefato** do
 # job, com retencao propria. Aqui sao lixo local: o que fica no repositorio e o

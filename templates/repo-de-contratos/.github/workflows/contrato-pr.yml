@@ -51,6 +51,16 @@ concurrency:
 jobs:
   check:
     runs-on: ubuntu-latest
+    # Onde esta o criterio, para todos os passos de uma vez. O pacote da
+    # ferramenta nao carrega mais o vocabulario, e sem esta variavel o harness
+    # cairia no default — o proprio diretorio dele — e pararia dizendo que nao
+    # achou o glossario.
+    #
+    # No job, e nao repetida em cada passo que chama o binario: duas copias
+    # divergiriam no dia em que um passo novo fosse acrescentado sem ela, e o
+    # sintoma seria um veredito emitido sob outro criterio.
+    env:
+      HARNESS_VOCAB: ${{ runner.temp }}/harness-vocab
     steps:
       # `ref` explicito: o padrao do evento `pull_request` e o merge commit, que
       # e desanexado. Para commitar de volta e preciso estar **na branch**.
@@ -114,10 +124,53 @@ jobs:
       - name: extrair
         run: tar -C "$RUNNER_TEMP" -xzf "$RUNNER_TEMP/harness-odcs-linux-x64.tar.gz"
 
-      # A procedencia do criterio, no log do job: versao do harness, commit, e
-      # sha256 do glossario e do catalogo que vao julgar este contrato.
+      # --- 1b. O criterio ----------------------------------------------------
+      #
+      # Os mesmos tres passos, para o outro pin. O vocabulario nao vem dentro do
+      # pacote da ferramenta porque muda em outra cadencia: acrescentar um termo
+      # nao deveria exigir publicar um binario, e o dono do glossario nao
+      # deveria depender da fila do dono do codigo.
+      #
+      # Repetir a sequencia aqui e deliberado. Um passo generico parametrizado
+      # economizaria dez linhas e esconderia qual dos dois pins reprovou, que e
+      # a unica coisa que interessa quando um deles reprova.
+      - name: baixar o vocabulario
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          . ./harness.lock
+          gh release download "$HARNESS_VOCAB_VERSAO" \
+            --repo "$HARNESS_VOCAB_REPO" \
+            --pattern 'harness-vocab.tar.gz' \
+            --dir "$RUNNER_TEMP"
+
+      - name: conferir o sha256 do vocabulario
+        run: |
+          . ./harness.lock
+          [ -n "$HARNESS_VOCAB_SHA256" ] || {
+            echo "::error::HARNESS_VOCAB_SHA256 vazio ou ausente em harness.lock"
+            exit 1
+          }
+          obtido="$(sha256sum "$RUNNER_TEMP/harness-vocab.tar.gz" | cut -d' ' -f1)"
+          if [ "$obtido" != "$HARNESS_VOCAB_SHA256" ]; then
+            echo "::error::o vocabulario baixado nao e o fixado em harness.lock"
+            echo "  esperado : $HARNESS_VOCAB_SHA256"
+            echo "  obtido   : $obtido"
+            exit 1
+          fi
+          echo "sha256 confere: $obtido"
+
+      - name: extrair o vocabulario
+        run: tar -C "$RUNNER_TEMP" -xzf "$RUNNER_TEMP/harness-vocab.tar.gz"
+
+      # A procedencia, no log do job: de um lado versao do harness e commit; do
+      # outro, versao e sha256 do glossario e do catalogo que vao julgar este
+      # contrato. Duas respostas separadas para duas perguntas separadas.
       - name: procedencia
-        run: cat "$RUNNER_TEMP/harness-odcs/VERSION"
+        run: |
+          cat "$RUNNER_TEMP/harness-odcs/VERSION"
+          echo
+          cat "$RUNNER_TEMP/harness-vocab/VERSION"
 
       # --- 2. O motor de validacao -------------------------------------------
       #

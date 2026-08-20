@@ -14,7 +14,12 @@ name: release
 
 on:
   push:
-    tags: ['v*']
+    # `v[0-9]*` e nao `v*`: o vocabulario tem release proprio, disparado por
+    # `vocab-v*` — que casa com `v*` e dispararia **este** workflow tambem.
+    # O binario seria republicado a cada termo cadastrado, com uma tag que nao
+    # bate com o `Cargo.toml`, e a trava de versao abaixo reprovaria o job.
+    # Falha barulhenta, mas por um motivo que ninguem ia adivinhar.
+    tags: ['v[0-9]*']
 
 permissions:
   contents: write

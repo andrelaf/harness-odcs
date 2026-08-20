@@ -25,12 +25,19 @@ entre as plataformas um arquivo, não um projeto.
 ./scripts/novo-repo-de-contratos.sh /caminho/do/data-contracts
 ```
 
-Sem argumento de versão, o script descobre o **último release publicado** e grava
-`harness.lock` com a tag e o sha256 daquele pacote. Para fixar outra:
+Sem argumentos de versão, o script descobre o **último release de cada fluxo** —
+a ferramenta e o vocabulário são publicados separados — e grava `harness.lock`
+com as duas tags e os dois sha256. Para fixar outras:
 
 ```bash
-./scripts/novo-repo-de-contratos.sh /caminho/do/data-contracts v0.4.0
+./scripts/novo-repo-de-contratos.sh /caminho/do/data-contracts v0.8.0 vocab-v1.1.0
 ```
+
+Ele filtra as tags por prefixo em vez de usar `/releases/latest`: os dois fluxos
+dividem o espaço de tags do repositório, e aquele endpoint devolve o release mais
+recente **qualquer que seja o fluxo** — um `vocab-v1.2.0` publicado hoje viraria
+a "última versão" do binário, e o pin sairia apontando para um tarball que não
+existe.
 
 O que ele deixa lá:
 
@@ -39,9 +46,9 @@ O que ele deixa lá:
 .github/CODEOWNERS                  quem revisa o quê
 .github/pull_request_template.md    o que quem abre e quem aprova precisam dizer
 azure-pipelines.yml                 a mesma esteira, para Azure DevOps
-scripts/preparar.sh                 baixa o pacote fixado (opcional, para dev)
+scripts/preparar.sh                 baixa os dois pacotes fixados (opcional, para dev)
 scripts/verificar.sh                antecipa o veredito (opcional, para dev)
-harness.lock                        a versão do critério — gerada, não copiada
+harness.lock                        os dois pins — gerado, não copiado
 contracts/                          vazio, à espera do primeiro contrato
 .gitignore  .gitattributes  README.md
 ```
@@ -113,16 +120,22 @@ Abra o pull request para `main`. Daí em diante o processo está em
 
 ## Manutenção
 
-**Subir a versão do critério** é um pull request no repositório de contratos,
-alterando `harness.lock`:
+**Subir a versão do critério** é um pull request no repositório de contratos
+alterando **duas linhas** do `harness.lock` — `HARNESS_VOCAB_VERSAO` e
+`HARNESS_VOCAB_SHA256`, direto das notas do release do vocabulário.
 
-```bash
-./scripts/novo-repo-de-contratos.sh /tmp/x v0.5.0   # só para ler o sha256 gerado
-```
+É a alteração de maior alcance possível naquele repositório: **pode reclassificar
+campos sem que nenhum contrato mude**. Por isso tem dono próprio, e por isso o
+pipeline roda o `check` de todos os contratos com o vocabulário novo antes de
+alguém aprovar — o relatório do pull request é a prévia do que a mudança faz.
 
-ou pegue o sha256 direto das notas do release. Subir de versão **pode
-reclassificar campos sem que nenhum contrato mude** — é a alteração de maior
-alcance possível naquele repositório, e por isso tem dono próprio.
+Se a reclassificação contradisser o que um contrato declara, a F6 segura:
+`aplicar` não sobrescreve a declaração humana, o item de gate aparece, e o merge
+espera decisão. Enquanto esse pull request não entra, nenhum contrato muda de
+veredito — que é o motivo de o pin existir.
+
+**Subir a versão da ferramenta** é o mesmo movimento nas outras duas linhas, e
+tem alcance menor: muda o código que julga, não o critério.
 
 **Atualizar o template** (workflow, scripts) é um commit aqui, em
 `templates/repo-de-contratos/`, seguido de copiar o arquivo alterado para os

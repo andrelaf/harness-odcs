@@ -47,6 +47,39 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # Mudar o vocabulario sem subir a `version` dele e o defeito silencioso
+      # deste desenho.
+      #
+      # `version` e o que o repositorio de contratos usa para saber sob qual
+      # criterio um laudo foi emitido, e o que o pacote grava no `VERSION`.
+      # Editar o glossario mantendo o numero faz duas vocabularios diferentes
+      # afirmarem ser o mesmo — e o laudo antigo passa a mentir sem que nenhuma
+      # linha dele mude.
+      #
+      # O sha256 pega o conteudo e nao resolve isto: ele diz que **mudou**, nao
+      # que a mudanca foi declarada. A declaracao e o numero.
+      - name: vocabulario alterado exige `version` nova
+        run: |
+          set -eu
+          git fetch --depth=1 origin "${{ github.base_ref }}"
+          base="$(git rev-parse FETCH_HEAD)"
+          falhou=0
+          for arquivo in glossary/glossario.yaml classification/catalogo-lgpd.yaml; do
+            git diff --quiet "$base" -- "$arquivo" && continue
+            antes="$(git show "$base:$arquivo" | grep -m1 '^version:' || true)"
+            agora="$(grep -m1 '^version:' "$arquivo" || true)"
+            if [ "$antes" = "$agora" ]; then
+              echo "::error file=$arquivo::$arquivo mudou e a \`version\` nao ($agora)"
+              echo "  a politica de versao esta no README ao lado do arquivo:"
+              echo "  termo ou alias novo e minor; texto corrigido e patch;"
+              echo "  remover id, ou mudar classificacao de termo existente, e major"
+              falhou=1
+            else
+              echo "$arquivo: $antes -> $agora"
+            fi
+          done
+          [ "$falhou" -eq 0 ]
+
       # O toolchain sai de `rust-toolchain.toml` — o mesmo 1.95.0 que compila
       # na maquina de quem desenvolve. `stable` aqui divergiria em silencio.
       - uses: Swatinem/rust-cache@v2

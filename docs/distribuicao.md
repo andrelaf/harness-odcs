@@ -32,21 +32,33 @@ exporta o contrato. A separação não vaza para dentro do Docker.
 
 ## O pacote
 
+São **dois**, e a separação entre eles é a mesma das três raízes: a ferramenta e
+o critério não mudam pelo mesmo motivo nem na mesma velocidade.
+
 ```
-harness-odcs/
-  harness.sh                 entrypoint de quem usa — não compila nada
-  bin/harness-odcs           o binário, em release
-  scripts/env.sh             a configuração, fonte única
-  scripts/imagem.sh          garante a imagem do motor no digest fixado
-  glossary/                  o critério
-  classification/            o critério
-  VERSION                    procedência: versão, commit, sha256 do vocabulário
+harness-odcs/                          harness-vocab/
+  harness.sh      entrypoint             glossary/         o que cada termo significa
+  bin/harness-odcs  o binário            classification/   o que a lei diz sobre ele
+  scripts/env.sh    a configuração       VERSION           versão e sha256 de cada um
+  scripts/imagem.sh o motor, no digest
+  VERSION           versão, commit
 ```
 
-Montado por [`scripts/package.sh`](../scripts/package.sh), que roda igual na
-máquina de quem desenvolve e no job de release. Se o empacotamento morasse no
-YAML do workflow, o pacote testado localmente não seria o publicado — e a
-diferença só apareceria no repositório de outra pessoa.
+Montados por [`scripts/package.sh`](../scripts/package.sh) e
+[`scripts/package-vocabulario.sh`](../scripts/package-vocabulario.sh), que rodam
+igual na máquina de quem desenvolve e no job de release. Se o empacotamento
+morasse no YAML do workflow, o pacote testado localmente não seria o publicado —
+e a diferença só apareceria no repositório de outra pessoa.
+
+**Por que o `VERSION` do vocabulário lista os dois arquivos separadamente:**
+porque são dois donos com cadências diferentes. O glossário é do *data steward*;
+o catálogo é do encarregado de dados. Uma revisão jurídica que corrige uma
+justificativa move um e não o outro, e *"qual catálogo classificou este campo?"*
+precisa de resposta própria.
+
+**Por que o `VERSION` do binário não fala mais do vocabulário:** ele afirmaria
+sobre um conteúdo que não carrega e não controla. O sha256 do glossário saiu
+daqui e foi para o pacote que de fato o entrega.
 
 **Dois entrypoints, um `env.sh`.** `run.sh` é de quem desenvolve o harness e
 compila; `harness.sh` é de quem apenas o usa e não compila. O `env.sh` escolhe o
@@ -58,26 +70,49 @@ visita o repositório**, em vez de o repositório conter a ferramenta.
 
 ## Publicar
 
+Dois fluxos, duas tags, no mesmo repositório:
+
 ```bash
-git tag v0.1.0 && git push origin v0.1.0
+git tag v0.8.0       && git push origin v0.8.0         # a ferramenta
+git tag vocab-v1.1.0 && git push origin vocab-v1.1.0   # o critério
 ```
 
-[`.github/workflows/release.yml`](../.github/workflows/release.yml) roda os
-testes, monta o pacote, gera o tarball e publica o release com o **sha256 nas
-notas**. Um release que não passa nos testes é um defeito distribuído por versão
-fixada — pior que um defeito local, porque agora ele tem número e alguém vai
-fixá-lo de propósito.
+[`release.yml`](../.github/workflows/release.yml) roda os testes, monta o pacote
+e publica com o **sha256 nas notas**. Um release que não passa nos testes é um
+defeito distribuído por versão fixada — pior que um defeito local, porque agora
+ele tem número e alguém vai fixá-lo de propósito.
+
+[`release-vocabulario.yml`](../.github/workflows/release-vocabulario.yml) faz o
+mesmo pelo critério, e o guarda dele é o `check` rodando contra os contratos
+deste repositório: alias declarado por dois termos, termo do glossário sem
+entrada no catálogo e incoerência entre `pii`, `sensivel` e `classification`
+reprovam ali, antes de o número existir.
+
+> **`v[0-9]*`, e não `v*`.** Os dois fluxos dividem o espaço de tags, e
+> `vocab-v1.1.0` casa com `v*`. Sem o filtro, cadastrar um termo republicaria o
+> binário — com uma tag que não bate com o `Cargo.toml`, o que faria a trava de
+> versão reprovar o job. Falha barulhenta, por um motivo que ninguém adivinharia.
 
 ## Consumir
 
-No repositório de contratos, um arquivo de pin — versão **e** sha256:
+No repositório de contratos, um arquivo de pin — versão **e** sha256, duas vezes:
 
 ```sh
 # harness.lock
 HARNESS_REPO=andrelaf/harness-odcs
-HARNESS_VERSAO=v0.1.0
+HARNESS_VERSAO=v0.8.0
 HARNESS_SHA256=<das notas do release>
+
+HARNESS_VOCAB_REPO=andrelaf/harness-odcs
+HARNESS_VOCAB_VERSAO=vocab-v1.1.0
+HARNESS_VOCAB_SHA256=<das notas do release>
 ```
+
+São dois pins porque são duas perguntas de auditoria: *que código julgou?* e
+*sob qual vocabulário?*. E é o segundo bloco que responde a pergunta prática de
+governança — **subir o vocabulário é um pull request de duas linhas**, revisável,
+datado, e que roda o `check` de todos os contratos antes de alguém aprovar.
+Enquanto ele não acontece, nenhum contrato muda de veredito.
 
 Só a versão não bastaria: uma tag pode ser movida, e no dia em que for, o mesmo
 contrato passa a ser julgado por outro critério sem que nada tenha mudado no
@@ -98,33 +133,46 @@ O mesmo `harness.lock` é lido pelo script local de quem escreve o contrato. Se 
 fixação existisse em dois lugares, o CI e a máquina de quem desenvolve
 discordariam no dia em que um dos dois subisse de versão.
 
-## O vocabulário vai dentro do pacote — por ora
+## O vocabulário saiu do pacote
 
-É uma escolha reversível, não uma convicção.
+Ele vinha dentro, e o custo era acoplar duas cadências: cadastrar `segmento`
+exigia compilar Rust e publicar um binário. Um *data steward* não deveria
+depender da fila do dono do código para acrescentar um termo.
 
-**O que ela garante:** quem escreve o contrato não tem o arquivo que o julga.
-Não por convenção nem por `CODEOWNERS` bem preenchido — por ausência. O gate do
-F4 depende disso, e essa é a forma mais barata de torná-lo estrutural.
+**O que a saída não custou:** nenhuma linha de Rust. `HARNESS_VOCAB` sempre foi a
+variável — `Config::from_env` nunca teve caminho embutido —, e a prova é
+verificável: o pacote com o vocabulário externo emitiu **o mesmo laudo**, com o
+mesmo `sha_do_criterio`, que a execução com o vocabulário ao lado do código.
+Caminho de entrega diferente, critério idêntico.
 
-**O que ela custa:** acoplar duas cadências. O vocabulário muda muito mais rápido
-que o código, e hoje adicionar um termo exige publicar uma versão nova do
-binário. Um steward de dados não deveria precisar de um release de Rust para
-cadastrar `segmento`.
+**O que ela ganhou de brinde:** o binário é preso a plataforma (`linux-x64`); o
+vocabulário é YAML e não é. O segundo pin funciona em Windows e macOS, onde o
+primeiro não serve.
 
-**Como sai disso, quando doer:** `HARNESS_VOCAB` já é a variável. O glossário
-ganha repositório próprio, com dono próprio; o pacote deixa de carregá-lo; o
-pipeline passa a fixar duas versões em vez de uma, e a apontar `HARNESS_VOCAB`
-para o segundo checkout. Nenhuma linha de Rust muda.
+**O que substituiu a garantia por ausência.** Enquanto o vocabulário morava no
+pacote, quem escrevia o contrato não tinha o arquivo que o julga — por ausência,
+que é mais barato que convenção. Agora a garantia é o
+[`CODEOWNERS`](../.github/CODEOWNERS) deste repositório, com dono por caminho em
+`/glossary/` e `/classification/`, separados entre *data steward* e encarregado
+de dados. É uma garantia mais fraca que ausência e mais forte que nada — e é a
+que existe sem repositório novo.
 
-**O que não pode acontecer em nenhuma das duas formas:** o vocabulário morar no
-repositório de contratos. Aí o autor fecha a própria lacuna, e o gate vira
-carimbo.
+**O que continua não podendo acontecer:** o vocabulário morar no repositório de
+contratos. Aí o autor amplia o glossário e fecha a própria lacuna no mesmo pull
+request, e o gate vira carimbo. É o mesmo buraco de auto-aprovação que faz o
+`check` ignorar `state/aprovacoes.json` de propósito, um nível abaixo.
+
+**O que falta para a separação completa:** um dono do vocabulário que não seja o
+dono do binário. No dia em que existir, muda **uma linha** —
+`HARNESS_VOCAB_REPO` — e os dois diretórios trocam de casa. A costura, que é a
+parte cara, já está feita.
 
 ## Limites, ditos em voz alta
 
-- **Só `linux-x64`.** É o que os runners usam. Quem desenvolve no Windows ou no
-  macOS monta o pacote localmente com `./scripts/package.sh` — o script é
-  multiplataforma, o release é que não.
+- **Só `linux-x64`, e só o binário.** É o que os runners usam. Quem desenvolve no
+  Windows ou no macOS monta o pacote localmente com `./scripts/package.sh` — o
+  script é multiplataforma, o release é que não. O pacote do vocabulário não tem
+  esse limite: é YAML, e o mesmo tarball serve em qualquer sistema.
 - **O pacote não é assinado**, só tem sha256. Contra tag movida, basta; contra
   um release forjado por quem tenha acesso de escrita ao repositório, não.
   Assinatura é a próxima camada, e ela só faz sentido depois de haver mais de um
@@ -132,4 +180,12 @@ carimbo.
 - **`VERSION` registra a procedência, mas nada a verifica em tempo de execução.**
   O binário confia no vocabulário que encontra em `HARNESS_VOCAB`. O que amarra
   os dois é o laudo, que grava versão e sha256 do glossário e do catálogo que de
-  fato julgaram — a verificação é posterior e documental, não preventiva.
+  fato julgaram — a verificação é posterior e documental, não preventiva. O que o
+  pipeline verifica antes é outra coisa: que o **tarball** baixado é o fixado.
+- **Nada impede combinar versões que nunca foram testadas juntas.** Os dois pins
+  são independentes por desenho, e é isso que permite subir um sem o outro. O
+  preço é que `HARNESS_VERSAO=v0.8.0` com `HARNESS_VOCAB_VERSAO=vocab-v9.0.0` é
+  uma combinação que ninguém exerceu. Na prática o `check` do pull request roda
+  exatamente a combinação fixada antes de alguém aprovar, então a combinação
+  nova é exercitada no ato de adotá-la — mas o repositório do harness não tem
+  como recusá-la de antemão.

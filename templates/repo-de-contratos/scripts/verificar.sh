@@ -23,7 +23,18 @@ cd "$RAIZ"
     exit 2
 }
 
+[ -f "$RAIZ/.harness-vocab/glossary/glossario.yaml" ] || {
+    echo "vocabulario ausente — rode ./scripts/preparar.sh" >&2
+    exit 2
+}
+
 # A imagem do motor de validacao, no digest fixado. Idempotente.
 "$RAIZ/.harness/scripts/imagem.sh"
+
+# O criterio vem do pacote do vocabulario, e nao do pacote do binario. Sem esta
+# linha o harness cairia no default — o proprio diretorio da ferramenta — e
+# pararia dizendo que nao achou o glossario.
+HARNESS_VOCAB="$RAIZ/.harness-vocab"
+export HARNESS_VOCAB
 
 exec "$RAIZ/.harness/harness.sh" check "$@"

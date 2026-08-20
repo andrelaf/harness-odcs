@@ -1,0 +1,106 @@
+# Publica o pacote distribuivel do **vocabulario** — glossario e catalogo.
+#
+# Irmao de `release.yml`, e separado dele por cadencia: o criterio muda quando a
+# organizacao aprende um termo novo ou o juridico revisa uma justificativa, e o
+# codigo muda quando o harness ganha comportamento. Amarrados num release so,
+# cadastrar `segmento` exigia compilar Rust e publicar um binario.
+#
+# Agora o repositorio de contratos fixa **duas** versoes: a da ferramenta e a do
+# criterio. Sao dois pins porque sao duas perguntas de auditoria diferentes —
+# "que codigo julgou?" e "sob qual vocabulario?".
+#
+# Os dois releases compartilham o espaco de tags deste repositorio, e e por isso
+# que o `release.yml` casa `v[0-9]*` e este casa `vocab-v*`. Um `v*` do lado de
+# la engoliria as tags daqui.
+
+name: release-vocabulario
+
+on:
+  push:
+    tags: ['vocab-v*']
+
+permissions:
+  contents: write
+
+jobs:
+  vocabulario:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: Swatinem/rust-cache@v2
+
+      # Idempotente, e confere o digest da imagem do datacontract-cli.
+      - name: preparar ambiente
+        run: ./scripts/bootstrap.sh
+
+      # A mesma disciplina do release do binario: um vocabulario que nao passa
+      # e um defeito distribuido por versao fixada, e agora com numero para
+      # alguem fixar de proposito.
+      #
+      # `check` e o guarda certo aqui porque as falhas de vocabulario sao
+      # exatamente o que ele reprova: termo sem `id`, alias declarado por dois
+      # termos, entrada apontando para termo inexistente, termo do glossario
+      # sem entrada no catalogo, e incoerencia entre `pii`, `sensivel` e
+      # `classification`. Nenhuma delas precisa de contrato para aparecer, mas
+      # todas aparecem aqui.
+      - name: o vocabulario julga os contratos deste repositorio
+        run: |
+          set -eu
+          for contrato in contracts/*/contract.odcs.yaml; do
+            echo "== $contrato =="
+            ./run.sh check --contrato "$contrato"
+          done
+
+      - name: montar o pacote
+        run: ./scripts/package-vocabulario.sh "$RUNNER_TEMP/harness-vocab"
+
+      # O tarball guarda o diretorio `harness-vocab/`, e nao seu conteudo
+      # solto — mesma razao do pacote do binario: extrair algo que se espalha
+      # pelo diretorio de trabalho de quem baixou e surpresa que se paga uma
+      # vez e nao se esquece.
+      - name: empacotar
+        run: |
+          tar -C "$RUNNER_TEMP" -czf harness-vocab.tar.gz harness-vocab
+          sha256sum harness-vocab.tar.gz | tee harness-vocab.tar.gz.sha256
+
+      # As notas carregam versao e sha256 de cada arquivo, separados. E o que
+      # permite responder "qual catalogo classificou este campo?" sem baixar o
+      # pacote — e sem confundir a resposta com a do glossario, que tem dono e
+      # cadencia proprios.
+      - name: notas
+        run: |
+          {
+            echo '## Vocabulario'
+            echo
+            echo '```'
+            cat "$RUNNER_TEMP/harness-vocab/VERSION"
+            echo
+            cat harness-vocab.tar.gz.sha256
+            echo '```'
+            echo
+            echo '## Como consumir'
+            echo
+            echo 'No `harness.lock` do repositorio de contratos, ao lado do pin da'
+            echo 'ferramenta. Fixe **versao e sha256** — nunca so a versao:'
+            echo
+            echo '```sh'
+            echo "HARNESS_VOCAB_REPO=${GITHUB_REPOSITORY}"
+            echo "HARNESS_VOCAB_VERSAO=${GITHUB_REF_NAME}"
+            echo "HARNESS_VOCAB_SHA256=$(cut -d' ' -f1 harness-vocab.tar.gz.sha256)"
+            echo '```'
+            echo
+            echo 'Trocar estas duas linhas e o ato que faz o criterio novo valer.'
+            echo 'Ate ele acontecer, nenhum contrato muda de veredito — que e o'
+            echo 'motivo de o pin existir.'
+          } > NOTAS.md
+
+      - name: publicar
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" \
+            harness-vocab.tar.gz \
+            harness-vocab.tar.gz.sha256 \
+            --title "$GITHUB_REF_NAME" \
+            --notes-file NOTAS.md

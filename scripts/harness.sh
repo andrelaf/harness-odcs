@@ -28,9 +28,13 @@ HARNESS_HOME="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
 # aqui a ferramenta e que visita o repositorio, e nao o contrario.
 : "${HARNESS_ROOT:=$(pwd)}"
 
-# O criterio vem do pacote. Apontar para outro lugar e o que permite fixar o
-# vocabulario numa versao propria, independente da versao do binario — ver
-# `.github/README.md` no repositorio de contratos.
+# O criterio **nao** vem mais do pacote: ele tem release e pin proprios, para
+# que cadastrar um termo nao exija publicar um binario. Quem chama aponta
+# `HARNESS_VOCAB` para o vocabulario que fixou no `harness.lock`.
+#
+# O default continua sendo este diretorio, e nao e legado: e o que faz o
+# repositorio do harness — onde o vocabulario mora ao lado do codigo — nao
+# precisar exportar nada para operar.
 : "${HARNESS_VOCAB:=$HARNESS_HOME}"
 
 export HARNESS_HOME HARNESS_ROOT HARNESS_VOCAB
@@ -39,6 +43,21 @@ export HARNESS_HOME HARNESS_ROOT HARNESS_VOCAB
 
 if [ ! -x "$HARNESS_BIN" ]; then
     echo "binario nao encontrado em $HARNESS_BIN — o pacote esta incompleto" >&2
+    exit 2
+fi
+
+# Falha aqui, e nao la dentro. Sem esta checagem o binario reclamaria de
+# "glossario nao encontrado" num caminho que quem chamou nunca escolheu — o
+# default —, e a mensagem mandaria procurar um arquivo em vez de mandar apontar
+# a variavel. Diagnostico errado sobrevive a tarde inteira.
+if [ ! -f "$HARNESS_VOCAB/glossary/glossario.yaml" ]; then
+    echo "vocabulario nao encontrado em $HARNESS_VOCAB" >&2
+    echo >&2
+    echo "  O pacote do binario nao carrega mais glossario e catalogo: eles tem" >&2
+    echo "  release proprio, para que cadastrar um termo nao exija publicar um" >&2
+    echo "  binario. Baixe o pacote fixado em HARNESS_VOCAB_VERSAO e aponte:" >&2
+    echo >&2
+    echo "    HARNESS_VOCAB=/caminho/do/harness-vocab $0 $*" >&2
     exit 2
 fi
 

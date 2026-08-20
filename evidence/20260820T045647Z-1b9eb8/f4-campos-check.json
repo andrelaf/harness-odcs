@@ -1,0 +1,100 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "properties": {
+    "id_cliente": {
+      "type": "string",
+      "unique": true,
+      "description": "Identificador interno pseudonimizado do cliente.",
+      "tags": [
+        "pii"
+      ],
+      "classification": "confidential"
+    },
+    "nome_completo": {
+      "type": "string",
+      "description": "Nome civil completo do cliente.",
+      "tags": [
+        "pii"
+      ],
+      "classification": "confidential"
+    },
+    "cpf": {
+      "type": "string",
+      "description": "Cadastro de Pessoa Fisica, 11 digitos, sem formatacao.",
+      "tags": [
+        "pii"
+      ],
+      "classification": "restricted"
+    },
+    "email": {
+      "type": "string",
+      "description": "Endereco de e-mail de contato.",
+      "tags": [
+        "pii"
+      ],
+      "classification": "confidential"
+    },
+    "data_nascimento": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "format": "date",
+      "description": "Data de nascimento do cliente.",
+      "tags": [
+        "pii"
+      ],
+      "classification": "confidential"
+    },
+    "cep": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "description": "Codigo de endere\u00e7amento postal de residencia, 8 digitos.",
+      "tags": [
+        "pii"
+      ],
+      "classification": "confidential"
+    },
+    "segmento": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "description": "Faixa comercial atribuida pela area de marketing.",
+      "tags": [
+        "pii"
+      ],
+      "classification": "confidential"
+    },
+    "data_cadastro": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "format": "date",
+      "description": "Data em que o cadastro foi criado.",
+      "classification": "internal"
+    },
+    "valor_total_compras": {
+      "type": [
+        "number",
+        "null"
+      ],
+      "description": "Soma historica das compras do cliente, em reais.",
+      "tags": [
+        "pii"
+      ],
+      "classification": "confidential"
+    }
+  },
+  "required": [
+    "id_cliente",
+    "nome_completo",
+    "cpf",
+    "email"
+  ],
+  "description": "Cadastro de clientes."
+}
