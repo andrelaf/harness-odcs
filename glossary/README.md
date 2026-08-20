@@ -25,18 +25,33 @@ termo só casa pelo próprio `id`.
 
 ## Como o casamento acontece
 
-O nome do campo do contrato é **normalizado** — minúsculas, e qualquer
-caractere que não seja letra ou dígito vira `_`, com repetições colapsadas — e
-comparado com o conjunto de chaves do glossário. As chaves de um termo são o
-`id` normalizado **mais** cada alias normalizado.
+O nome do campo do contrato é **normalizado** e comparado com o conjunto de
+chaves do glossário. As chaves de um termo são o `id` normalizado **mais** cada
+alias normalizado. A normalização é `normalizar` em
+[`src/features/f2_mapear.rs`](../src/features/f2_mapear.rs), e faz três coisas,
+nesta ordem:
+
+1. minúsculas;
+2. **descarta** tudo que não for letra ou dígito — ponto, hífen, `_` e espaço
+   somem, não viram separador;
+3. dobra o diacrítico para a letra base — `á→a`, `ç→c`, `ñ→n`.
+
+Consequência prática: `pessoa.cpf`, `pessoa_cpf`, `Pessoa-CPF` e `pessoacpf` são
+**a mesma chave**. E `código_postal` casa com `codigo_postal`, porque `endereço`
+e `endereco` são a mesma palavra — o contrato que escolhe uma grafia não deveria
+virar lacuna por isso.
 
 Casou: `mapeado`. Não casou: `sem_correspondencia`, que é uma **lacuna** e vai
 para o relatório de F4 — não é falha de F2.
 
-**Acento não é normalizado.** `codigo_postal` e `código_postal` são chaves
-diferentes, e é para serem: casar por aproximação criaria vínculo que ninguém
-declarou, e o projeto inteiro se apoia em decisão declarada e auditável. Grafia
-alternativa se resolve acrescentando o alias.
+**O que continua sem casar é aproximação.** `cpf_cliente` não casa com `cpf`, e
+`e-mail-corp` não casa com `email`: dobrar grafia é reconhecer a mesma palavra
+escrita de outro jeito, enquanto adivinhar palavra parecida criaria vínculo que
+ninguém declarou. Nome diferente se resolve acrescentando o alias, sempre.
+
+> Escrever alias que difere de outro só por separador ou acento é inofensivo e
+> inútil: `e_mail` produz a mesma chave que `email`. O par existe no glossário
+> desde antes desta regra valer.
 
 ## Integridade — o que torna o glossário inválido
 
