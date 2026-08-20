@@ -225,15 +225,34 @@ jobs:
       # O contrato enriquecido e o laudo propostos, mais o rastro do run. Nao
       # sao commitados aqui: sao a materia-prima da sugestao que quem abriu o PR
       # aceita.
+      # A evidencia sobe **so quando reprova**, e nao a cada push.
+      #
+      # No caminho feliz ela e redundante: o laudo proposto vai inteiro dentro
+      # do comentario do pull request, e o `report.json` de cada contrato ja
+      # esta no resumo do job. Guardar 226 KB por contrato, por push, para
+      # duplicar o que ja esta na tela e custo sem leitor — com 200 contratos
+      # seriam ~45 MB a cada push.
+      #
+      # Quando reprova de verdade e o oposto: **nada e emitido**, porque sem
+      # proposta valida nao ha laudo a registrar. Ai a saida bruta do container
+      # e o unico material que existe, e e a hora de te-la.
+      #
+      # `5` — gate aberto — nao conta como reprovar: o laudo foi emitido e esta
+      # no comentario. Codigo vazio conta, porque significa que a verificacao
+      # nem chegou a rodar.
       - name: artefatos
-        if: always()
+        if: >-
+          always() && (failure()
+          || steps.check.outputs.codigo == ''
+          || (steps.check.outputs.codigo != '0' && steps.check.outputs.codigo != '5'))
         uses: actions/upload-artifact@v4
         with:
           name: contrato-${{ github.run_id }}
-          path: |
-            evidence/
-            trace/
+          # `trace/` nao sobe: neste repositorio ele e **versionado**, entao o
+          # artefato seria a segunda copia do mesmo arquivo.
+          path: evidence/
           retention-days: 30
+          if-no-files-found: ignore
 
       # O veredito, traduzido para o que o GitHub entende como aprovado.
       #

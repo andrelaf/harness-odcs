@@ -338,8 +338,27 @@ jobs:
       # Os dois diretorios ainda aparecem no checkout porque o container escreve
       # dentro do volume montado — sao ignorados pelo git, e some-los de vez
       # exigiria montar um segundo volume.
+      # E sobe **so quando reprova**, e nao a cada push.
+      #
+      # No caminho feliz ela e redundante duas vezes: o laudo foi **commitado**
+      # nesta branch pelo passo `aplicar`, e o corpo dele ainda vai no
+      # comentario do pull request. Guardar 226 KB por contrato para duplicar o
+      # que ja esta no diff e custo sem leitor — e num repositorio com 200
+      # contratos, um bump de `HARNESS_VOCAB_VERSAO` torna o alvo **todos**
+      # eles: ~45 MB a cada push.
+      #
+      # Quando reprova de verdade e o oposto: **nada e emitido**, porque sem
+      # proposta valida nao ha laudo a registrar. Ai a saida bruta do container
+      # e o unico material que existe.
+      #
+      # `5` — gate aberto — nao conta como reprovar: o laudo existe e esta no
+      # comentario. Codigo vazio conta, porque significa que a verificacao nem
+      # chegou a rodar.
       - name: artefatos
-        if: always()
+        if: >-
+          always() && (failure()
+          || steps.check.outputs.codigo == ''
+          || (steps.check.outputs.codigo != '0' && steps.check.outputs.codigo != '5'))
         uses: actions/upload-artifact@v4
         with:
           name: evidencia-${{ github.run_id }}
