@@ -140,7 +140,7 @@ com os pontos de divergência marcados como `# DIVERGE`. O que muda:
 | `on: pull_request` | *branch policy* da branch de destino, configurada na UI |
 | `gh release download` | `curl` (público) ou API autenticada / feed de artefatos |
 | `contents: write` | permissão *Contribute* para a conta de build |
-| `--formato github` | um `--formato azure` emitindo `##vso[task.logissue …]` — ainda não existe |
+| `--formato github` | `--formato azure` — mesma anotação presa ao arquivo, sintaxe `##vso[task.logissue …]` |
 | `CODEOWNERS` | *Automatically included reviewers*, por caminho |
 | `gh pr comment` | REST de *pull request threads* |
 

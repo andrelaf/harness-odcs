@@ -28,25 +28,53 @@ pacote, então adicionar um termo exige publicar uma versão nova do binário �
 `segmento`. `HARNESS_VOCAB` já é a variável que separa; falta o repositório, o
 dono e o segundo pin no pipeline. Ver [`docs/distribuicao.md`](docs/distribuicao.md).
 
-**Renderizador para Azure DevOps.** Um `Formato::Azure` emitindo
-`##vso[task.logissue …]`, irmão de `github()`. O `azure-pipelines.yml` já está no
-template, mas ainda usa `--formato texto` e nunca rodou num pipeline real.
+## Reduz atrito de quem escreve contrato — no pull request, que é onde ele está
 
-## Reduz atrito de quem escreve contrato
+**O laudo aponta o vocabulário disponível quando houver lacuna.** Hoje o item de
+gate diz `campo sem termo no glossario — segue sem classificacao`
+(`src/features/f4_gate.rs:1034`): nomeia a ausência e não diz nada sobre o
+vocabulário que existe. Quem lê o comentário descobre que errou e continua sem
+saber o que estava disponível.
+
+É o mesmo dado que o `termos` imprimiria, entregue onde a pessoa já está lendo —
+sem instalação, sem pacote novo por plataforma, sem depender do plugin. E não
+fere o `docs/decisao.md`: **listar** o vocabulário é fato. Ordenar por
+similaridade continua sendo `sugerir`, e continua fora.
+
+Há uma dose a escolher: apontar para o glossário na versão fixada do
+`harness.lock` (barato, sempre certo) ou embutir a lista dos termos no comentário
+(mais útil, ruidoso quando o glossário crescer). Começar pelo ponteiro.
+
+**É o único item desta seção com consumidor.** Os outros três estão abaixo.
+
+## Bloqueado — espera um loop local que ninguém adotou
+
+Esta seção assumia que existe alguém com o pacote na máquina. **Não existe.** O
+uso real do repositório de contratos é só via pull request: ninguém roda
+`scripts/preparar.sh` nem `scripts/verificar.sh`, e o veredito chega pelo
+comentário. Os três itens abaixo reduzem atrito *antes* do pull request — num
+momento que, no fluxo de hoje, não tem ninguém.
+
+**A condição, escrita uma vez:** só valem a pena depois que alguém adotar a
+verificação local. E adotar custa mais do que parece — o release publica apenas
+`linux-x64` (um job em `.github/workflows/release.yml`), então quem escreve
+contrato em Windows ou macOS precisa de WSL, container ou Rust antes de começar.
 
 **`harness termos [--buscar cpf]`** — listar e buscar o vocabulário disponível.
-Hoje a pessoa nomeia campo no escuro e só descobre a lacuna quando o pull request
-já está aberto. Provavelmente a mais útil das três.
+Passa no critério abaixo e continua sendo do binário; o que falta não é lugar, é
+usuário. Enquanto o fluxo for só pull request, quem precisa dessa informação a
+recebe pelo laudo, acima.
 
 **`harness novo --dominio clientes --contrato pedidos`** — esqueleto no caminho
-certo, com `id` batendo com o diretório, já passando na convenção de nome. Hoje as
-regras se descobrem errando.
+certo, com `id` batendo com o diretório. Além de bloqueado, está no lugar errado:
+não responde pergunta nenhuma, produz um arquivo. Dois geradores de esqueleto
+diferentes nunca *discordam*, porque quem julga o resultado é o `check` depois.
+Falha no critério, e é do plugin — ao lado do `sugerir`.
 
 **`sugerir` — no plugin, não no binário.** Mostrar os termos parecidos para um
-campo sem correspondência é útil, e é a única das três que **não** deve morar
-aqui: aproximação é palpite, e o binário tem a promessa de nunca resolver
-ambiguidade sozinho. Heurística de similaridade dentro dele contradiz o
-`docs/decisao.md` inteiro.
+campo sem correspondência é útil, e **não** deve morar aqui: aproximação é
+palpite, e o binário tem a promessa de nunca resolver ambiguidade sozinho.
+Heurística de similaridade dentro dele contradiz o `docs/decisao.md` inteiro.
 
 No plugin é honesto — sugestão de assistente, que a pessoa aceita ou descarta, e
 que o `check` valida depois. Ele consome `harness termos --json` e faz a parte de
@@ -56,7 +84,7 @@ linguagem em cima disso, sem reimplementar o casamento.
 discordar sobre a mesma pergunta, ela é do binário. `termos` responde "este nome
 casa?" — a mesma pergunta do `check`, e admite uma resposta só. `sugerir`
 responde "o que você provavelmente quis dizer?" — pergunta que o `check` nunca
-faz.
+faz. `novo` não responde pergunta: entrega arquivo, e o `check` julga depois.
 
 **Plugin de editor — em repositório próprio, e não aqui.** A separação não é de
 escopo, é de natureza: este projeto promete determinismo, e um plugin com modelo
@@ -64,8 +92,11 @@ dentro não pode prometer isso. Juntá-los abriria a porta para alguém pedir ao
 modelo que "ajude a decidir" uma classificação — e a garantia que sustenta o
 laudo cairia junto.
 
-Há uma ordem obrigatória: o plugin só existe depois de `termos`. Sem ela, ele
-reimplementa o casamento com o glossário, e passam a existir duas
+Há uma ordem obrigatória, e ela tem um degrau a mais do que parecia: o plugin só
+existe depois de `termos`, e `termos` só existe depois de alguém adotar a
+verificação local. O plugin precisa do pacote na máquina pelo mesmo motivo que
+ele — então herda a condição inteira, e não é a saída para o bloqueio acima. Sem
+`termos`, ele reimplementa o casamento com o glossário, e passam a existir duas
 implementações da mesma regra. Com ela, o plugin apenas orquestra — entende o
 pedido, redige o YAML, consulta o vocabulário, roda `check`, lê a lacuna. Nunca
 julga.

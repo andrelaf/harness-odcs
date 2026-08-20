@@ -36,22 +36,26 @@ O [`docs/brief.md`](brief.md) fecha com um checklist. Onde cada item está hoje:
 | **Medição** | `./run.sh metrics` deriva de `trace/` — não há contador paralelo. 14 runs medidos: 81,5 s somados, **99,6% em espera de container**. A leitura honesta está em `decisao.md`. |
 | **Decisão** | [`decisao.md`](decisao.md) diz onde se paga e, com o mesmo peso, onde uma alternativa simples vence. |
 
-### O que falta para fechar o checklist do curso
+### O que faltava para fechar o checklist do curso
 
-Dois itens do brief não foram produzidos, e vale saber antes da apresentação:
+Dois itens do brief ficaram pendentes até depois da Semana 2, e hoje estão
+prontos — vale saber que a pendência existiu, porque ela é parte da história:
 
-**`BACKLOG-FUTURO.md` não existe.** O brief da Semana 2 pede que o escopo seja
-congelado e que tudo o que sobrar vá para esse arquivo. O escopo *foi* congelado
-na prática — as 4 features não cresceram —, mas o arquivo que registra o que
-ficou de fora nunca foi escrito.
+**`BACKLOG-FUTURO.md`.** O brief da Semana 2 pede que o escopo seja congelado e
+que tudo o que sobrar vá para esse arquivo. O escopo *foi* congelado na prática
+— as 4 features não cresceram —, mas o arquivo que registra o que ficou de fora
+só foi escrito depois. Está em [`BACKLOG-FUTURO.md`](../BACKLOG-FUTURO.md), e
+desde então passou a ser onde as decisões de escopo são discutidas: é lá que
+`sugerir` foi separado de `termos`, e onde ficou registrado que a seção de
+atrito inteira espera um loop local que ninguém adotou.
 
-**`docs/portabilidade.md` não existe.** A Semana 2 pede prova registrada de que
-o mesmo fluxo roda nas duas IDEs — screenshots, trace de ambas, ou o documento.
-A portabilidade é real (nada de IDE vazou para a política), mas **não está
-provada por escrito**, e é o critério que o brief chama de "o grande item da
-semana".
+**`docs/portabilidade.md`.** A Semana 2 pede prova registrada de que o mesmo
+fluxo roda nas duas IDEs — o critério que o brief chama de "o grande item da
+semana". A portabilidade sempre foi real (nada de IDE vazou para a política),
+mas ficou um tempo **sem prova escrita**. Está em
+[`portabilidade.md`](portabilidade.md).
 
-São os dois documentos que eu escreveria antes do Demo Day.
+O checklist do brief está fechado.
 
 ---
 
