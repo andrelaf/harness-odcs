@@ -28,7 +28,8 @@
 use crate::config::Config;
 use crate::ctx::Ctx;
 use crate::exit::Exit;
-use crate::features::{contrato, f1_validar, f4_gate};
+use crate::features::f4_gate::curto;
+use crate::features::{contrato, f1_validar, f2_mapear, f3_classificar, f4_gate};
 use crate::trace::{self, Draft, Tracer};
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
@@ -389,6 +390,11 @@ fn montar(ctx: &mut Ctx, alvo: &str) -> Result<Relatorio> {
         }),
     }
 
+    // Calculada aqui, e nao em cada saida: as tres reprovacoes abaixo saem por
+    // portas diferentes, e uma delas esquecer o carimbo seria o mesmo defeito
+    // que este bloco existe para fechar.
+    let identidade = identidade_em_vigor(ctx, bruto.as_ref().ok());
+
     // --- 2. O lint ODCS.
     for m in lint(ctx, alvo, &run_id)? {
         defeitos.push(Defeito {
@@ -402,7 +408,7 @@ fn montar(ctx: &mut Ctx, alvo: &str) -> Result<Relatorio> {
     // que o proprio padrao recusa, e todo defeito seguinte seria consequencia
     // deste. Para aqui e reporta o que ja tem.
     if !defeitos.is_empty() {
-        return Ok(fechado(run_id, alvo, defeitos, avisos));
+        return Ok(fechado(run_id, alvo, &identidade, defeitos, avisos));
     }
 
     // --- 3. Mapeamento, classificacao, gate e enriquecimento.
@@ -414,7 +420,7 @@ fn montar(ctx: &mut Ctx, alvo: &str) -> Result<Relatorio> {
                 arquivo: alvo.to_string(),
                 mensagem: e,
             });
-            return Ok(fechado(run_id, alvo, defeitos, avisos));
+            return Ok(fechado(run_id, alvo, &identidade, defeitos, avisos));
         }
     };
 
@@ -434,7 +440,7 @@ fn montar(ctx: &mut Ctx, alvo: &str) -> Result<Relatorio> {
             arquivo: alvo.to_string(),
             mensagem: e,
         });
-        return Ok(fechado(run_id, alvo, defeitos, avisos));
+        return Ok(fechado(run_id, alvo, &identidade, defeitos, avisos));
     }
 
     match f4_gate::lint_do_enriquecido(ctx) {
@@ -806,17 +812,63 @@ fn lint(ctx: &mut Ctx, alvo: &str, run_id: &str) -> Result<Vec<String>> {
     }
 }
 
+/// Quem foi verificado, e sob qual regua — as duas perguntas que uma reprovacao
+/// precisa responder sozinha.
+///
+/// No caminho feliz isto sai da composicao. Quando a verificacao para antes de
+/// classificar — nome errado, contrato ilegivel, lint reprovado —, a composicao
+/// nunca acontece, e o relatorio saia dizendo apenas "reprovado" com o
+/// **caminho** do arquivo. Caminho nao e documento: o mesmo caminho no dia
+/// seguinte e outro conteudo, e quem le a reprovacao depois nao tem como saber
+/// qual das versoes reprovou nem com qual vocabulario.
+///
+/// O carimbo diz **em vigor**, e nao **causa**. Defeito de nome e de lint
+/// reprovariam sob qualquer catalogo; a etapa de cada defeito e que diz o que
+/// falhou. O que a versao responde e outra pergunta, e ela so aparece depois:
+/// *"passava na semana passada — mudou o contrato ou mudamos a regua?"*
+#[derive(Debug, Default, Clone)]
+pub(crate) struct Identidade {
+    pub contrato_sha256: Option<String>,
+    pub glossario_versao: Option<String>,
+    pub catalogo_versao: Option<String>,
+}
+
+/// Le glossario e catalogo so para carimbar a versao. Dois `read_to_string` de
+/// arquivo que ja esta no disco — barato o bastante para nao valer condicional,
+/// e o custo medido do `check` e 99,6% partida de container.
+///
+/// `None` quando o proprio insumo esta ilegivel, e ai a ausencia e a
+/// informacao: um relatorio que nao consegue nomear a regua esta dizendo que a
+/// regua e o problema.
+fn identidade_em_vigor(ctx: &Ctx, bruto: Option<&String>) -> Identidade {
+    Identidade {
+        contrato_sha256: bruto.map(|b| crate::tools::sha256_hex(b)),
+        glossario_versao: f2_mapear::glossario_do_disco(ctx)
+            .ok()
+            .map(|(g, _)| g.version),
+        catalogo_versao: f3_classificar::catalogo_do_disco(ctx)
+            .ok()
+            .map(|(c, _)| c.version),
+    }
+}
+
 /// Relatorio de uma verificacao que parou antes de classificar.
-fn fechado(run_id: String, alvo: &str, defeitos: Vec<Defeito>, avisos: Vec<String>) -> Relatorio {
+fn fechado(
+    run_id: String,
+    alvo: &str,
+    identidade: &Identidade,
+    defeitos: Vec<Defeito>,
+    avisos: Vec<String>,
+) -> Relatorio {
     Relatorio {
         schema_version: SCHEMA_VERSION,
         run_id,
         contrato: alvo.to_string(),
-        contrato_sha256: None,
+        contrato_sha256: identidade.contrato_sha256.clone(),
         veredito: Veredito::Fail,
         exit_code: Exit::PhaseFail.code(),
-        glossario_versao: None,
-        catalogo_versao: None,
+        glossario_versao: identidade.glossario_versao.clone(),
+        catalogo_versao: identidade.catalogo_versao.clone(),
         resumo: None,
         defeitos,
         avisos,
@@ -936,7 +988,14 @@ pub fn markdown(r: &Relatorio, laudo: Option<&str>) -> String {
         Veredito::Bloqueado => "### Aguardando decisao humana",
     };
     s.push_str(cabecalho);
-    s.push_str(&format!("\n\n`{}`\n\n", r.contrato));
+    // O sha256 ao lado do caminho, e nao numa linha propria: e a mesma
+    // informacao — *qual arquivo* —, e separa-las convidaria a ler so a
+    // primeira. Dezesseis digitos e o corte que o resto do produto ja usa.
+    s.push_str(&format!("\n\n`{}`", r.contrato));
+    if let Some(sha) = &r.contrato_sha256 {
+        s.push_str(&format!(" · sha256 `{}`", curto(sha)));
+    }
+    s.push_str("\n\n");
 
     if let Some(resumo) = &r.resumo {
         s.push_str(&format!(
@@ -949,8 +1008,17 @@ pub fn markdown(r: &Relatorio, laudo: Option<&str>) -> String {
             resumo.reclassificacoes
         ));
     }
-    if let (Some(g), Some(c)) = (&r.glossario_versao, &r.catalogo_versao) {
-        s.push_str(&format!("Glossario v{g} · catalogo v{c}\n\n"));
+    // Sai tambem quando reprova, e e ai que ela ganha o sentido: a pergunta
+    // que vem depois de "reprovou" nunca e so *o que* — e *mudou o contrato ou
+    // mudamos a regua?*. Cada insumo responde por si porque um deles ilegivel e
+    // suspeito de ser a causa, e um `if` exigindo os dois esconderia
+    // justamente esse caso.
+    if r.glossario_versao.is_some() || r.catalogo_versao.is_some() {
+        s.push_str(&format!(
+            "Glossario {} · catalogo {}\n\n",
+            versao_ou_ausente(&r.glossario_versao),
+            versao_ou_ausente(&r.catalogo_versao)
+        ));
     }
 
     if !r.defeitos.is_empty() {
@@ -1036,6 +1104,18 @@ pub fn markdown(r: &Relatorio, laudo: Option<&str>) -> String {
     s
 }
 
+/// A versao de um insumo do criterio, ou o que dizer quando ela falta.
+///
+/// Faltar aqui nao e detalhe: os dois insumos estavam no disco quando o `check`
+/// rodou, entao ausencia significa **ilegivel** — e um vocabulario ilegivel e o
+/// primeiro suspeito da reprovacao que a pessoa esta lendo.
+fn versao_ou_ausente(v: &Option<String>) -> String {
+    match v {
+        Some(v) => format!("v{v}"),
+        None => "ilegivel".to_string(),
+    }
+}
+
 /// `%`, quebra de linha e retorno tem significado nas anotacoes do GitHub e
 /// precisam ir codificados, senao a mensagem e truncada na primeira linha.
 fn escapar(s: &str) -> String {
@@ -1046,8 +1126,22 @@ fn escapar(s: &str) -> String {
 
 /// A saida para uma pessoa lendo o terminal.
 pub fn imprimir(r: &Relatorio) {
-    println!("contrato   {}", r.contrato);
+    print!("contrato   {}", r.contrato);
+    if let Some(sha) = &r.contrato_sha256 {
+        print!("  sha256 {}", curto(sha));
+    }
+    println!();
     println!("veredito   {}", r.veredito.rotulo());
+    // Uma linha, e depois do veredito: quem roda `check` no terminal esta
+    // olhando para a linha de cima. Esta so precisa estar no scroll quando a
+    // pergunta seguinte aparecer — e ela aparece com "passava ontem".
+    if r.glossario_versao.is_some() || r.catalogo_versao.is_some() {
+        println!(
+            "criterio   glossario {} · catalogo {}",
+            versao_ou_ausente(&r.glossario_versao),
+            versao_ou_ausente(&r.catalogo_versao)
+        );
+    }
 
     if let Some(resumo) = &r.resumo {
         println!(
@@ -1137,15 +1231,78 @@ mod tests {
             arquivo: "contracts/X/contract.odcs.yaml".to_string(),
             mensagem: "nao e kebab-case".to_string(),
         }];
+        let ident = Identidade {
+            contrato_sha256: Some("a".repeat(64)),
+            glossario_versao: Some("1.2.0".to_string()),
+            catalogo_versao: Some("1.1.0".to_string()),
+        };
         let r = fechado(
             "run".to_string(),
             "contracts/X/contract.odcs.yaml",
+            &ident,
             d,
             Vec::new(),
         );
         assert_eq!(r.veredito, Veredito::Fail);
         assert_eq!(r.exit_code, 1);
         assert!(r.resumo.is_none() && r.propostas.contrato.is_none());
+    }
+
+    /// A reprovacao tem de dizer **qual arquivo** e **sob qual regua**. Sem
+    /// isso ela aponta para um caminho, e caminho nao e documento: o mesmo
+    /// caminho no dia seguinte e outro conteudo.
+    #[test]
+    fn parada_antes_de_classificar_carimba_arquivo_e_criterio() {
+        let ident = Identidade {
+            contrato_sha256: Some("b".repeat(64)),
+            glossario_versao: Some("1.2.0".to_string()),
+            catalogo_versao: Some("1.1.0".to_string()),
+        };
+        let r = fechado(
+            "run".to_string(),
+            "contracts/X/contract.odcs.yaml",
+            &ident,
+            Vec::new(),
+            Vec::new(),
+        );
+        assert_eq!(r.contrato_sha256.as_deref(), Some("b".repeat(64).as_str()));
+        assert_eq!(r.glossario_versao.as_deref(), Some("1.2.0"));
+        assert_eq!(r.catalogo_versao.as_deref(), Some("1.1.0"));
+
+        let md = markdown(&r, None);
+        assert!(md.contains("sha256 `bbbbbbbbbbbbbbbb`"), "{md}");
+        assert!(md.contains("Glossario v1.2.0 · catalogo v1.1.0"), "{md}");
+    }
+
+    /// Insumo ilegivel nao pode sumir atras do que foi lido: se o glossario nao
+    /// abre, ele e o primeiro suspeito da reprovacao que a pessoa esta lendo.
+    #[test]
+    fn insumo_ilegivel_aparece_nomeado_em_vez_de_sumir() {
+        let mut r = base(Veredito::Fail);
+        r.resumo = None;
+        r.glossario_versao = None;
+        r.catalogo_versao = Some("1.1.0".to_string());
+
+        let md = markdown(&r, None);
+        assert!(md.contains("Glossario ilegivel · catalogo v1.1.0"), "{md}");
+    }
+
+    /// Contrato ilegivel nao tem sha — e o relatorio nao pode inventar um nem
+    /// entrar em panico tentando encurta-lo.
+    #[test]
+    fn sem_sha_o_cabecalho_sai_so_com_o_caminho() {
+        let ident = Identidade::default();
+        let r = fechado(
+            "run".to_string(),
+            "contracts/X/contract.odcs.yaml",
+            &ident,
+            Vec::new(),
+            Vec::new(),
+        );
+        let md = markdown(&r, None);
+        assert!(md.contains("`contracts/X/contract.odcs.yaml`"), "{md}");
+        assert!(!md.contains("sha256"), "{md}");
+        assert!(!md.contains("Glossario"), "{md}");
     }
 
     /// A anotacao tem de prender no arquivo, senao ela cai no log e ninguem le.

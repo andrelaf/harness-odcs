@@ -569,7 +569,7 @@ fn gravar_laudo(ctx: &mut Ctx, c: &Composicao) -> Result<(), String> {
 /// sempre de `sha256_hex`. Aqui nao vale correr o risco: o laudo e o unico
 /// artefato que sai deste repositorio para quem nao roda o harness, e um panico
 /// na formatacao de um cabecalho derrubaria a fase inteira.
-fn curto(sha: &str) -> &str {
+pub(crate) fn curto(sha: &str) -> &str {
     &sha[..sha.len().min(16)]
 }
 

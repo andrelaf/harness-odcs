@@ -235,7 +235,7 @@ pub fn laudo_atual(ctx: &mut Ctx, feature: &str, fase: &str) -> Result<Classific
     })
 }
 
-fn catalogo_do_disco(ctx: &Ctx) -> Result<(Catalogo, String), String> {
+pub(crate) fn catalogo_do_disco(ctx: &Ctx) -> Result<(Catalogo, String), String> {
     let path = ctx.cfg.vocab.join(CATALOGO);
     let bruto = fs::read_to_string(&path)
         .map_err(|e| format!("catalogo `{CATALOGO}` ilegivel em {} ({e})", path.display()))?;
