@@ -51,16 +51,6 @@ concurrency:
 jobs:
   check:
     runs-on: ubuntu-latest
-    # Onde esta o criterio, para todos os passos de uma vez. O pacote da
-    # ferramenta nao carrega mais o vocabulario, e sem esta variavel o harness
-    # cairia no default — o proprio diretorio dele — e pararia dizendo que nao
-    # achou o glossario.
-    #
-    # No job, e nao repetida em cada passo que chama o binario: duas copias
-    # divergiriam no dia em que um passo novo fosse acrescentado sem ela, e o
-    # sintoma seria um veredito emitido sob outro criterio.
-    env:
-      HARNESS_VOCAB: ${{ runner.temp }}/harness-vocab
     steps:
       # `ref` explicito: o padrao do evento `pull_request` e o merge commit, que
       # e desanexado. Para commitar de volta e preciso estar **na branch**.
@@ -68,6 +58,24 @@ jobs:
         with:
           ref: ${{ github.head_ref }}
 
+      # Onde esta o criterio, para todos os passos de uma vez. O pacote da
+      # ferramenta nao carrega mais o vocabulario, e sem esta variavel o harness
+      # cairia no default — o proprio diretorio dele — e pararia dizendo que nao
+      # achou o glossario.
+      #
+      # Definida **uma vez**, e nao repetida em cada passo que chama o binario:
+      # duas copias divergiriam no dia em que um passo novo fosse acrescentado
+      # sem ela, e o sintoma seria um veredito emitido sob outro criterio.
+      #
+      # Via `$GITHUB_ENV`, e nao por `env:` no job — isto nao e estilo. O
+      # contexto `runner` **nao existe** no escopo do job: `${{ runner.temp }}`
+      # ali e YAML valido e workflow **invalido**, e o Actions recusa o arquivo
+      # antes de criar job nenhum. O sintoma nao aponta a causa — o run aparece
+      # nomeado pelo caminho do arquivo, com evento `push` e zero jobs, e o
+      # status check obrigatorio fica preso em "Expected — Waiting for status to
+      # be reported" para sempre.
+      - name: onde esta o criterio
+        run: echo "HARNESS_VOCAB=$RUNNER_TEMP/harness-vocab" >> "$GITHUB_ENV"
       # Qual criterio julga este repositorio — repo, versao e sha256. Vive em
       # `harness.lock` e nao neste YAML porque quem roda a verificacao na
       # propria maquina le o mesmo arquivo. Duas declaracoes divergiriam no dia
