@@ -47,6 +47,39 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # Mudar o vocabulario sem subir a `version` dele e o defeito silencioso
+      # deste desenho.
+      #
+      # `version` e o que o repositorio de contratos usa para saber sob qual
+      # criterio um laudo foi emitido, e o que o pacote grava no `VERSION`.
+      # Editar o glossario mantendo o numero faz duas vocabularios diferentes
+      # afirmarem ser o mesmo — e o laudo antigo passa a mentir sem que nenhuma
+      # linha dele mude.
+      #
+      # O sha256 pega o conteudo e nao resolve isto: ele diz que **mudou**, nao
+      # que a mudanca foi declarada. A declaracao e o numero.
+      - name: vocabulario alterado exige `version` nova
+        run: |
+          set -eu
+          git fetch --depth=1 origin "${{ github.base_ref }}"
+          base="$(git rev-parse FETCH_HEAD)"
+          falhou=0
+          for arquivo in glossary/glossario.yaml classification/catalogo-lgpd.yaml; do
+            git diff --quiet "$base" -- "$arquivo" && continue
+            antes="$(git show "$base:$arquivo" | grep -m1 '^version:' || true)"
+            agora="$(grep -m1 '^version:' "$arquivo" || true)"
+            if [ "$antes" = "$agora" ]; then
+              echo "::error file=$arquivo::$arquivo mudou e a \`version\` nao ($agora)"
+              echo "  a politica de versao esta no README ao lado do arquivo:"
+              echo "  termo ou alias novo e minor; texto corrigido e patch;"
+              echo "  remover id, ou mudar classificacao de termo existente, e major"
+              falhou=1
+            else
+              echo "$arquivo: $antes -> $agora"
+            fi
+          done
+          [ "$falhou" -eq 0 ]
+
       # O toolchain sai de `rust-toolchain.toml` — o mesmo 1.95.0 que compila
       # na maquina de quem desenvolve. `stable` aqui divergiria em silencio.
       - uses: Swatinem/rust-cache@v2
@@ -59,20 +92,90 @@ jobs:
       # Uma unica execucao. 99,6% do custo medido deste harness e partida de
       # container, entao desenhar tres vezes nao pode custar tres verificacoes:
       # o resultado e gravado e os passos seguintes so redesenham.
+      # Quais contratos verificar.
+      #
+      # Este passo faltava, e a falta era um defeito: o `check` **recusa
+      # escolher sozinho** quando ha mais de um contrato e ninguem passou
+      # `--contrato` (exit 4, antes de escrever o `--saida`). Enquanto havia so
+      # `clientes`, chamar sem alvo funcionava por acidente; quando `pedidos`
+      # entrou, o passo passou a sair com erro e os dois passos seguintes —
+      # ambos `if: always()` — tentavam ler um `report.json` que nunca fora
+      # escrito.
+      #
+      # Quem sabe o alvo e o **git**, e nao o binario. Por isso a selecao mora
+      # neste YAML, igual ao template do repositorio de contratos.
+      - name: contratos alterados
+        id: alvos
+        run: |
+          git fetch --quiet origin "${{ github.base_ref }}"
+          # `--diff-filter=d` exclui o que foi **removido**. Sem ele, um pull
+          # request que apaga um contrato coloca o caminho apagado na lista, o
+          # `check` reprova com "contrato nao existe" (exit 4) e o job fica
+          # vermelho por ter feito exatamente o que foi pedido.
+          alterados=$(git diff --name-only --diff-filter=d \
+            "origin/${{ github.base_ref }}...HEAD" \
+            -- 'contracts/**/contract.odcs.yaml' || true)
+
+          # Mudanca em `crates/` ou no vocabulario: o alvo passa a ser **todo**
+          # contrato, porque o codigo ou o criterio que os julga pode ter
+          # mudado. E o que faz este job ser o teste de ponta a ponta do
+          # produto, e nao so a verificacao de um arquivo tocado.
+          if [ -z "$alterados" ]; then
+            alterados=$(find contracts -name contract.odcs.yaml | sort)
+            echo "nenhum contrato no diff — verificando todos, o criterio pode ter mudado"
+          fi
+          [ -n "$alterados" ] || { echo "repositorio sem contratos"; exit 1; }
+          echo "$alterados"
+          echo "$alterados" > "$RUNNER_TEMP/alvos.txt"
+
       - name: verificar contrato
         id: check
         run: |
-          set +e
-          ./run.sh check --formato github --saida "$RUNNER_TEMP/report.json"
-          codigo=$?
-          set -e
-          echo "codigo=$codigo" >> "$GITHUB_OUTPUT"
+          set -u
+          pior=0
+          : > "$RUNNER_TEMP/comentario.md"
+
+          while IFS= read -r alvo; do
+            [ -n "$alvo" ] || continue
+            echo "::group::$alvo"
+            relatorio="$RUNNER_TEMP/report-$(echo "$alvo" | tr '/' '-').json"
+
+            set +e
+            ./run.sh check --contrato "$alvo" --formato github --saida "$relatorio"
+            codigo=$?
+            set -e
+
+            # O desenho sai do relatorio gravado, e nao de uma segunda
+            # verificacao: 99,6% do custo medido e partida de container.
+            if [ -f "$relatorio" ]; then
+              ./run.sh report "$relatorio" --formato markdown >> "$RUNNER_TEMP/comentario.md"
+              echo >> "$RUNNER_TEMP/comentario.md"
+            else
+              # `check` nem chegou a julgar — erro de ambiente ou de uso. Dizer
+              # isso no comentario e melhor que um comentario ausente.
+              echo "### \`$alvo\`" >> "$RUNNER_TEMP/comentario.md"
+              echo >> "$RUNNER_TEMP/comentario.md"
+              echo "A verificacao nao produziu relatorio (exit \`$codigo\`). Veja o log do job." \
+                >> "$RUNNER_TEMP/comentario.md"
+              echo >> "$RUNNER_TEMP/comentario.md"
+            fi
+
+            # O pior veredito manda: um contrato reprovado nao fica escondido
+            # atras de outro que passou. `4` (erro) tem precedencia sobre `1`
+            # (reprovou), que tem sobre `5` (aguarda decisao).
+            case "$codigo" in
+              4) pior=4 ;;
+              1) [ "$pior" = 4 ] || pior=1 ;;
+              5) [ "$pior" = 0 ] && pior=5 ;;
+            esac
+            echo "::endgroup::"
+          done < "$RUNNER_TEMP/alvos.txt"
+
+          echo "codigo=$pior" >> "$GITHUB_OUTPUT"
 
       - name: resumo do job
         if: always()
-        run: |
-          ./run.sh report "$RUNNER_TEMP/report.json" --formato markdown \
-            >> "$GITHUB_STEP_SUMMARY"
+        run: cat "$RUNNER_TEMP/comentario.md" >> "$GITHUB_STEP_SUMMARY"
 
       # `--edit-last` atualiza o comentario existente em vez de empilhar um por
       # push. Se ainda nao houver nenhum, o primeiro comando falha e o segundo
@@ -83,23 +186,73 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           PR: ${{ github.event.pull_request.number }}
         run: |
-          ./run.sh report "$RUNNER_TEMP/report.json" --formato markdown \
-            > "$RUNNER_TEMP/comentario.md"
-          gh pr comment "$PR" --body-file "$RUNNER_TEMP/comentario.md" --edit-last \
-            || gh pr comment "$PR" --body-file "$RUNNER_TEMP/comentario.md"
+          # O corpo ja foi montado no passo anterior, contrato a contrato. Se
+          # aquele passo nem chegou a rodar, o arquivo nao existe — e comentar
+          # "nada" e pior que nao comentar.
+          [ -s "$RUNNER_TEMP/comentario.md" ] || {
+            echo "sem corpo para comentar — a verificacao nao chegou a rodar"
+            exit 0
+          }
+
+          # O comentario do GitHub aceita 65536 caracteres, e um contrato ocupa
+          # ~5 KB (mais, quando ha lacuna e o vocabulario entra). Passar do
+          # limite nao trunca: a API recusa, e o pull request fica **sem
+          # comentario nenhum** — o pior desfecho possivel, porque some
+          # justamente no pull request grande, que e o que mais precisa dele.
+          #
+          # O resumo do job nao tem esse teto, e a evidencia inteira esta no
+          # artefato. Truncar aqui e apontar para la mantem o comentario util
+          # sem competir com eles.
+          LIMITE=60000
+          corpo="$RUNNER_TEMP/corpo.md"
+          if [ "$(wc -c < "$RUNNER_TEMP/comentario.md")" -gt "$LIMITE" ]; then
+            head -c "$LIMITE" "$RUNNER_TEMP/comentario.md" > "$corpo"
+            {
+              echo
+              echo '---'
+              echo
+              echo '**Comentario truncado** — este pull request toca contratos demais para'
+              echo 'caber no limite de 65536 caracteres. O relatorio completo esta no'
+              echo '**resumo do job** e no artefato `contrato-'"$GITHUB_RUN_ID"'`.'
+            } >> "$corpo"
+          else
+            cp "$RUNNER_TEMP/comentario.md" "$corpo"
+          fi
+
+          gh pr comment "$PR" --body-file "$corpo" --edit-last \
+            || gh pr comment "$PR" --body-file "$corpo"
 
       # O contrato enriquecido e o laudo propostos, mais o rastro do run. Nao
       # sao commitados aqui: sao a materia-prima da sugestao que quem abriu o PR
       # aceita.
+      # A evidencia sobe **so quando reprova**, e nao a cada push.
+      #
+      # No caminho feliz ela e redundante: o laudo proposto vai inteiro dentro
+      # do comentario do pull request, e o `report.json` de cada contrato ja
+      # esta no resumo do job. Guardar 226 KB por contrato, por push, para
+      # duplicar o que ja esta na tela e custo sem leitor — com 200 contratos
+      # seriam ~45 MB a cada push.
+      #
+      # Quando reprova de verdade e o oposto: **nada e emitido**, porque sem
+      # proposta valida nao ha laudo a registrar. Ai a saida bruta do container
+      # e o unico material que existe, e e a hora de te-la.
+      #
+      # `5` — gate aberto — nao conta como reprovar: o laudo foi emitido e esta
+      # no comentario. Codigo vazio conta, porque significa que a verificacao
+      # nem chegou a rodar.
       - name: artefatos
-        if: always()
+        if: >-
+          always() && (failure()
+          || steps.check.outputs.codigo == ''
+          || (steps.check.outputs.codigo != '0' && steps.check.outputs.codigo != '5'))
         uses: actions/upload-artifact@v4
         with:
           name: contrato-${{ github.run_id }}
-          path: |
-            evidence/
-            trace/
+          # `trace/` nao sobe: neste repositorio ele e **versionado**, entao o
+          # artefato seria a segunda copia do mesmo arquivo.
+          path: evidence/
           retention-days: 30
+          if-no-files-found: ignore
 
       # O veredito, traduzido para o que o GitHub entende como aprovado.
       #

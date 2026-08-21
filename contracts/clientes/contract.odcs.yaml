@@ -74,6 +74,12 @@ schema:
   - name: segmento
     logicalType: string
     description: Faixa comercial atribuida pela area de marketing.
+    classification: confidential
+    tags:
+    - pii
+    authoritativeDefinitions:
+    - url: glossary/glossario.yaml#perfil.segmento
+      type: businessDefinition
   - name: data_cadastro
     logicalType: date
     description: Data em que o cadastro foi criado.
@@ -84,3 +90,9 @@ schema:
   - name: valor_total_compras
     logicalType: number
     description: Soma historica das compras do cliente, em reais.
+    classification: confidential
+    tags:
+    - pii
+    authoritativeDefinitions:
+    - url: glossary/glossario.yaml#perfil.valor_total_compras
+      type: businessDefinition

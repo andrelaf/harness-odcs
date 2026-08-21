@@ -224,6 +224,12 @@ rm -f state/gate-pendente.json
 execuções da demo são evidência tão legítima quanto as outras. Só o cursor de
 estado volta ao lugar.
 
+A diferença entre os dois é o que o repositório guarda. `trace/` é versionado —
+é dele que a medição sai, e é o entregável que o brief nomeia. `evidence/` fica
+no disco e é ignorada pelo `.gitignore`, porque é regenerável a partir do
+contrato e do critério, ambos fixados por versão. Rodar a demo não deixa
+nenhum arquivo para commitar depois.
+
 ---
 
 ## Perguntas prováveis, e a resposta curta
@@ -235,4 +241,4 @@ estado volta ao lugar.
 | *"Por que não usar um LLM para classificar?"* | Classificaria mais rápido e perderia cobertura verificável, justificativa por decisão e controle do que é persistido. Se essas garantias não forem requisito, um LLM é a escolha certa e isto é caro demais. |
 | *"Isso escala?"* | Até a partida do container. 530 ms × 11 invocações por run. Acima de algumas centenas de contratos, precisa de lote ou CLI de vida longa. |
 | *"O que acontece se o agente esquecer um campo?"* | Não é possível esquecer sem reprovar: `verify` confere que cada campo do contrato aparece exatamente uma vez, e campo a mais ou a menos é FAIL. |
-| *"Por que Rust?"* | Porque a política precisa ser um binário único, testável sem disco nem container, e igual nas duas IDEs. `tests/flow.rs` enumera a tabela de transições inteira sem I/O. |
+| *"Por que Rust?"* | Porque a política precisa ser um binário único, testável sem disco nem container, e igual nas duas IDEs. `crates/harness/tests/flow.rs` enumera a tabela de transições inteira sem I/O. |

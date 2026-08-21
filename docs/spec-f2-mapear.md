@@ -141,7 +141,7 @@ aqui.
 
 ## Onde a implementação mora
 
-`src/features/f2_mapear.rs`, compilada, registrada em `features::dispatch`.
+`crates/laudo/src/features/f2_mapear.rs`, compilada, registrada em `harness::dispatch`.
 Mesmo motivo de F1: regra de domínio em script seria política fora do binário, e
 a segunda IDE passaria a depender do shell certo estar no PATH para o fluxo
 decidir a mesma coisa.

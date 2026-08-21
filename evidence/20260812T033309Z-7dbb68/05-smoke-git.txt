@@ -1,5 +1,0 @@
-# comando: git rev-parse --git-dir
-# --- stdout ---
-.git
-
-# --- stderr ---

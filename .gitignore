@@ -9,6 +9,28 @@
 # Temporarios da escrita atomica de estado (tmp + rename).
 *.tmp
 
+# A evidencia de cada run.
+#
+# O `docs/artefatos.md` sempre a classificou como **efemera** — "vive num run,
+# nao vai para o repositorio", regeneravel a partir do contrato e do criterio —
+# e o template do repositorio de contratos ja a ignorava. So este repositorio a
+# commitava, contra a propria regra: 5,3 MB em 27 runs, contra 348 KB em 62
+# runs de `trace/`.
+#
+# O que sustenta ignora-la:
+#   - nada a le em tempo de execucao. "Evidencia e saida, nunca entrada" esta
+#     escrito em f2_mapear.rs e f3_classificar.rs;
+#   - nenhum documento aponta para um run especifico, so para `<run_id>`;
+#   - o trace foi desenhado para circular sem ela — guarda `evidence=<arquivo>
+#     sha256=<hash>`, entao o hash prova o que a ferramenta disse mesmo com o
+#     arquivo ausente;
+#   - o que precisa sobreviver ja e commitado ao lado do contrato: laudo,
+#     contrato enriquecido, proposta e o HTML.
+#
+# `trace/` fica. O brief o nomeia como entregavel, a medicao inteira deriva
+# dele sem contador paralelo, e ele e quinze vezes menor.
+/evidence/
+
 # contracts/ guarda fonte, nunca artefato gerado: relatorio de validacao vive
 # em evidence/<run_id>/. Rede de seguranca para um `--output` distraido — a
 # regra esta em contracts/README.md, isto so impede que o engano vire commit.

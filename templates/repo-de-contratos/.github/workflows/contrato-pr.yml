@@ -51,6 +51,16 @@ concurrency:
 jobs:
   check:
     runs-on: ubuntu-latest
+    # Onde esta o criterio, para todos os passos de uma vez. O pacote da
+    # ferramenta nao carrega mais o vocabulario, e sem esta variavel o harness
+    # cairia no default — o proprio diretorio dele — e pararia dizendo que nao
+    # achou o glossario.
+    #
+    # No job, e nao repetida em cada passo que chama o binario: duas copias
+    # divergiriam no dia em que um passo novo fosse acrescentado sem ela, e o
+    # sintoma seria um veredito emitido sob outro criterio.
+    env:
+      HARNESS_VOCAB: ${{ runner.temp }}/harness-vocab
     steps:
       # `ref` explicito: o padrao do evento `pull_request` e o merge commit, que
       # e desanexado. Para commitar de volta e preciso estar **na branch**.
@@ -114,10 +124,53 @@ jobs:
       - name: extrair
         run: tar -C "$RUNNER_TEMP" -xzf "$RUNNER_TEMP/harness-odcs-linux-x64.tar.gz"
 
-      # A procedencia do criterio, no log do job: versao do harness, commit, e
-      # sha256 do glossario e do catalogo que vao julgar este contrato.
+      # --- 1b. O criterio ----------------------------------------------------
+      #
+      # Os mesmos tres passos, para o outro pin. O vocabulario nao vem dentro do
+      # pacote da ferramenta porque muda em outra cadencia: acrescentar um termo
+      # nao deveria exigir publicar um binario, e o dono do glossario nao
+      # deveria depender da fila do dono do codigo.
+      #
+      # Repetir a sequencia aqui e deliberado. Um passo generico parametrizado
+      # economizaria dez linhas e esconderia qual dos dois pins reprovou, que e
+      # a unica coisa que interessa quando um deles reprova.
+      - name: baixar o vocabulario
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          . ./harness.lock
+          gh release download "$HARNESS_VOCAB_VERSAO" \
+            --repo "$HARNESS_VOCAB_REPO" \
+            --pattern 'harness-vocab.tar.gz' \
+            --dir "$RUNNER_TEMP"
+
+      - name: conferir o sha256 do vocabulario
+        run: |
+          . ./harness.lock
+          [ -n "$HARNESS_VOCAB_SHA256" ] || {
+            echo "::error::HARNESS_VOCAB_SHA256 vazio ou ausente em harness.lock"
+            exit 1
+          }
+          obtido="$(sha256sum "$RUNNER_TEMP/harness-vocab.tar.gz" | cut -d' ' -f1)"
+          if [ "$obtido" != "$HARNESS_VOCAB_SHA256" ]; then
+            echo "::error::o vocabulario baixado nao e o fixado em harness.lock"
+            echo "  esperado : $HARNESS_VOCAB_SHA256"
+            echo "  obtido   : $obtido"
+            exit 1
+          fi
+          echo "sha256 confere: $obtido"
+
+      - name: extrair o vocabulario
+        run: tar -C "$RUNNER_TEMP" -xzf "$RUNNER_TEMP/harness-vocab.tar.gz"
+
+      # A procedencia, no log do job: de um lado versao do harness e commit; do
+      # outro, versao e sha256 do glossario e do catalogo que vao julgar este
+      # contrato. Duas respostas separadas para duas perguntas separadas.
       - name: procedencia
-        run: cat "$RUNNER_TEMP/harness-odcs/VERSION"
+        run: |
+          cat "$RUNNER_TEMP/harness-odcs/VERSION"
+          echo
+          cat "$RUNNER_TEMP/harness-vocab/VERSION"
 
       # --- 2. O motor de validacao -------------------------------------------
       #
@@ -141,7 +194,7 @@ jobs:
         id: alvos
         run: |
           git fetch --quiet origin "${{ github.base_ref }}"
-          alterados=$(git diff --name-only             "origin/${{ github.base_ref }}...HEAD"             -- 'contracts/**/contract.odcs.yaml' || true)
+          alterados=$(git diff --name-only --diff-filter=d             "origin/${{ github.base_ref }}...HEAD"             -- 'contracts/**/contract.odcs.yaml' || true)
 
           # Mudanca so no workflow ou no pin: o alvo passa a ser **todo**
           # contrato, porque o criterio que os julga pode ter mudado.
@@ -251,7 +304,32 @@ jobs:
           PR: ${{ github.event.pull_request.number }}
         run: |
           [ -s "$RUNNER_TEMP/comentario.md" ] || { echo "nada a comentar"; exit 0; }
-          gh pr comment "$PR" --body-file "$RUNNER_TEMP/comentario.md" --edit-last             || gh pr comment "$PR" --body-file "$RUNNER_TEMP/comentario.md"
+
+          # O comentario do GitHub aceita 65536 caracteres, e cada contrato
+          # ocupa ~5 KB — mais quando ha lacuna e o vocabulario entra. Passar do
+          # limite nao trunca: a API recusa, e o pull request fica **sem
+          # comentario nenhum**. O desfecho pior aparece justamente no pull
+          # request grande, que e o que mais precisa do comentario.
+          #
+          # Num repositorio com dezenas de contratos isto deixa de ser hipotese:
+          # um bump de `HARNESS_VOCAB_VERSAO` faz o alvo virar **todos** eles.
+          LIMITE=60000
+          corpo="$RUNNER_TEMP/corpo.md"
+          if [ "$(wc -c < "$RUNNER_TEMP/comentario.md")" -gt "$LIMITE" ]; then
+            head -c "$LIMITE" "$RUNNER_TEMP/comentario.md" > "$corpo"
+            {
+              echo
+              echo '---'
+              echo
+              echo '**Comentario truncado** — este pull request toca contratos demais para'
+              echo 'caber no limite de 65536 caracteres. O relatorio completo de cada'
+              echo 'contrato esta no artefato `evidencia-'"$GITHUB_RUN_ID"'`.'
+            } >> "$corpo"
+          else
+            cp "$RUNNER_TEMP/comentario.md" "$corpo"
+          fi
+
+          gh pr comment "$PR" --body-file "$corpo" --edit-last             || gh pr comment "$PR" --body-file "$corpo"
 
       # A saida bruta das ferramentas, para depurar uma execucao que reprovou.
       #
@@ -260,8 +338,27 @@ jobs:
       # Os dois diretorios ainda aparecem no checkout porque o container escreve
       # dentro do volume montado — sao ignorados pelo git, e some-los de vez
       # exigiria montar um segundo volume.
+      # E sobe **so quando reprova**, e nao a cada push.
+      #
+      # No caminho feliz ela e redundante duas vezes: o laudo foi **commitado**
+      # nesta branch pelo passo `aplicar`, e o corpo dele ainda vai no
+      # comentario do pull request. Guardar 226 KB por contrato para duplicar o
+      # que ja esta no diff e custo sem leitor — e num repositorio com 200
+      # contratos, um bump de `HARNESS_VOCAB_VERSAO` torna o alvo **todos**
+      # eles: ~45 MB a cada push.
+      #
+      # Quando reprova de verdade e o oposto: **nada e emitido**, porque sem
+      # proposta valida nao ha laudo a registrar. Ai a saida bruta do container
+      # e o unico material que existe.
+      #
+      # `5` — gate aberto — nao conta como reprovar: o laudo existe e esta no
+      # comentario. Codigo vazio conta, porque significa que a verificacao nem
+      # chegou a rodar.
       - name: artefatos
-        if: always()
+        if: >-
+          always() && (failure()
+          || steps.check.outputs.codigo == ''
+          || (steps.check.outputs.codigo != '0' && steps.check.outputs.codigo != '5'))
         uses: actions/upload-artifact@v4
         with:
           name: evidencia-${{ github.run_id }}

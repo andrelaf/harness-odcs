@@ -137,11 +137,26 @@ AD desfaz sem que nenhuma tela pareça mal configurada.
   anterior em vez da `main`, e a `main` nunca recebeu nada. Funciona, mas o
   histórico não mostra quatro entregas independentes — mostra uma só, longa.
   Merge de volta ao fim de cada feature, desde F1.
-- **`evidence/` cresce sem política de retenção.** 14 execuções já deixaram
-  dezenas de arquivos. Precisa de expiração antes de virar problema.
+- **`evidence/` era versionada aqui, contra a própria regra.** O
+  [`artefatos.md`](artefatos.md) sempre a classificou como efêmera e o template
+  do repositório de contratos já a ignorava; só este repositório a commitava.
+  Chegou a 5,3 MB em 27 execuções — quinze vezes o `trace/`, que tem o dobro de
+  runs — e a limpeza era tarefa manual recorrente, com commit próprio no
+  histórico. Resolvido com uma linha de `.gitignore`, e não com um comando de
+  expiração: o que precisa sobreviver já é commitado ao lado do contrato.
+  **A lição não é sobre retenção, é sobre regra escrita e não aplicada.**
 - **O hash do gate cobre o texto do item.** Reescrever a frase de um `detalhe`
-  invalida aprovações antigas. Falha fechada, que é o lado certo de errar, mas
-  incomoda no uso.
+  invalida aprovações antigas. Falha fechada, que é o lado certo de errar.
+  Ficou como está por um motivo que só apareceu depois: o `check` **ignora**
+  `state/aprovacoes.json` de propósito — num pull request ele seria
+  auto-aprovação —, e o fluxo real é só pull request. O incômodo é de um loop
+  local que ninguém adotou.
+- **A fronteira entre produto e harness existiu em prosa antes de existir em
+  código.** Este documento e o [`curso.md`](curso.md) afirmavam que o `check`
+  não usava a máquina de estados; era verdade, e nada impedia a próxima linha de
+  passar a usar. Só virou estrutura — `crates/laudo` e `crates/harness`, com a
+  seta recusada pelo compilador — depois de o projeto estar pronto. **Teria
+  custado menos no começo, quando eram nove arquivos.**
 
 ## Recomendação
 

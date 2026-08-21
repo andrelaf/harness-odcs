@@ -1,5 +1,0 @@
-# comando: git log -1 --format=%h %s
-# --- stdout ---
-506598a Initial commit
-
-# --- stderr ---

@@ -33,6 +33,6 @@ Se o veredito for `5`, quem aprova precisa dizer o que está aprovando:
 
 ## Verificação
 
-- [ ] `cargo test` passa
+- [ ] `cargo test --workspace` passa
 - [ ] `./run.sh check` roda localmente com o mesmo veredito que o CI reportou
 - [ ] Docs atualizados, se o comportamento observável mudou

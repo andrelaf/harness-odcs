@@ -1,6 +1,35 @@
+# Workspace de dois crates e um binario.
+#
+# A divisao responde a pergunta que este projeto passou a existencia inteira
+# respondendo em prosa: **o que e o produto e o que e o harness?**
+#
+#   crates/laudo    o produto — le contrato, casa termo, classifica, emite laudo
+#   crates/harness  o andaime — maquina de estados, fases, progresso, medicao
+#
+# A seta e `harness -> laudo`, e **nunca** o contrario. Isso nao e convencao:
+# `laudo` nao declara `harness` como dependencia, entao um `use harness::` la
+# dentro nao compila. A fronteira deixou de depender de ninguem esbarrar nela.
+#
+# O nome do produto e `laudo` porque e o que ele entrega. `check`, `aplicar` e
+# `report` convergem todos nele, e e o documento que responde por que cada campo
+# foi classificado assim e sob qual criterio.
+[workspace]
+members = ["crates/laudo", "crates/harness"]
+
+# As versoes num lugar so. Dois crates que compilam contra `serde` diferente
+# produzem erros de tipo que parecem impossiveis — o mesmo nome, o mesmo campo,
+# e tipos que nao casam.
+[workspace.dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+anyhow = "1"
+time = { version = "0.3", features = ["formatting", "macros"] }
+sha2 = "0.10"
+serde_norway = "0.9.42"
+
 [package]
 name = "harness-odcs"
-version = "0.7.0"
+version = "0.8.0"
 edition = "2024"
 rust-version = "1.95"
 description = "Harness de desenvolvimento incremental para classificacao de privacidade de contratos ODCS"
@@ -8,33 +37,24 @@ publish = false
 # Esta versao e a tag do release sao **a mesma coisa**, e o workflow de release
 # reprova quando divergem. Sem essa trava, `Cargo.toml` viraria um numero
 # decorativo — foi o que aconteceu: ficou em 0.1.0 durante cinco releases.
+#
+# 0.8.0 e nao 0.7.1: o pacote deixou de carregar o vocabulario, entao consumidor
+# que so subir a versao para de achar o glossario. Quebra de contrato de
+# distribuicao merece o digito do meio.
 
-# Split lib/bin proposital: sem a lib, `tests/` nao alcanca a maquina de
-# estados e o criterio "determinismo testavel" fica sem prova. A politica
-# vive na lib; o bin so faz CLI e exit code.
-[lib]
-name = "harness"
-path = "src/lib.rs"
-
+# O binario so faz CLI e exit code — a politica vive nos dois crates, onde
+# `tests/` a alcanca. Ele depende dos dois porque traduz argumento para os dois:
+# `check`/`aplicar`/`report` sao do produto; `plan`/`next`/`approve`/`reset` sao
+# do harness.
 [[bin]]
 name = "harness-odcs"
 path = "src/main.rs"
 
 [dependencies]
-# Estado e trace em JSON/JSONL.
-serde = { version = "1", features = ["derive"] }
-serde_json = "1"
+laudo = { path = "crates/laudo" }
+harness = { path = "crates/harness" }
 # CLI e help do ponto de entrada.
 clap = { version = "4", features = ["derive"] }
-# Erros com contexto.
-anyhow = "1"
-# Timestamps ISO-8601 em UTC para o trace.
-time = { version = "0.3", features = ["formatting", "macros"] }
-# Hash da evidencia. Precisa ser estavel entre versoes, o que exclui o
-# DefaultHasher da std (SipHash sem garantia de estabilidade).
-sha2 = "0.10"
-# Glossario canonico (F2) em YAML. Fork mantido do serde_yaml, que o autor
-# arquivou em 2024 — a alternativa seria carregar o glossario em JSON, o que
-# transferiria o custo para quem edita o arquivo a mao. O harness nao parseia
-# ODCS com isto: quem interpreta contrato e o datacontract-cli.
-serde_norway = "0.9.42"
+anyhow.workspace = true
+serde.workspace = true
+serde_json.workspace = true

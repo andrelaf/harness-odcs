@@ -1,0 +1,30 @@
+# O andaime: a maquina de estados que conduziu a construcao do produto.
+#
+# Ordem de fases explicita, teto de passos que aborta, gate humano, trace
+# append-only e a medicao derivada dele. E o objeto do curso — e a parte que o
+# `check` **nao** usa, o que este crate torna visivel em vez de explicar.
+#
+# Depende de `laudo` porque orquestra o produto: `dispatch` mapeia
+# `(feature, fase)` para a funcao de dominio que atende. A seta so aponta para
+# ca — `laudo` nao sabe que este crate existe.
+[package]
+name = "harness"
+version = "0.8.0"
+edition = "2024"
+rust-version = "1.95"
+description = "Maquina de estados de desenvolvimento incremental: fases, gate humano, trace e metricas"
+publish = false
+
+# Split lib/bin proposital, e preservado na divisao: sem a lib, `tests/` nao
+# alcanca a maquina de estados e o criterio "determinismo testavel" fica sem
+# prova. Os 11 testes da tabela de transicoes moram em `tests/flow.rs`.
+[lib]
+name = "harness"
+path = "src/lib.rs"
+
+[dependencies]
+laudo = { path = "../laudo" }
+serde.workspace = true
+serde_json.workspace = true
+anyhow.workspace = true
+time.workspace = true

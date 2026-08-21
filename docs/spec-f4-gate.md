@@ -284,7 +284,7 @@ enriquecimento é idempotente, tag alheia é preservada.
 
 ## Onde a implementação mora
 
-`src/features/f4_gate.rs`, compilada, registrada em `features::dispatch`. Os
+`crates/laudo/src/features/f4_gate.rs`, compilada, registrada em `harness::dispatch`. Os
 tipos de `state/gate-pendente.json` e `state/aprovacoes.json` moram em
 `state.rs`, junto do resto do estado persistido, porque quem os consome é o
 comando `approve` — e `main.rs` não pode depender de domínio.

@@ -17,6 +17,11 @@
 # F4 depende de estes dois serem artefatos que o autor NAO controla.
 #
 # O ideal e que morem em outro repositorio, consumidos por versao fixada.
+# **A metade "por versao fixada" ja valeu**: o vocabulario tem release e pin
+# proprios (`HARNESS_VOCAB_*` no `harness.lock`), e o pacote do binario nao o
+# carrega mais. O que falta e a mudanca de casa, que espera um dono distinto do
+# dono do codigo — ver `docs/distribuicao.md`.
+#
 # Enquanto estiverem aqui, sao donos distintos — e vale um check que reprove
 # PR que toque contrato e catalogo ao mesmo tempo.
 /glossary/              @sua-org/data-stewards
@@ -34,3 +39,16 @@
 # --- O harness ---------------------------------------------------------------
 /src/                   @sua-org/plataforma-dados
 /.github/               @sua-org/plataforma-dados
+
+# --- Publicar o criterio e um ato do criterio, nao do codigo ------------------
+#
+# **Depois de `/.github/` de proposito:** no CODEOWNERS vale o *ultimo* padrao
+# que casa, entao estas linhas antes daquela seriam engolidas por ela, e a
+# publicacao do vocabulario cairia para o time de plataforma sem que nada
+# parecesse errado.
+#
+# Cortar uma tag `vocab-v*` faz o criterio novo existir com numero para alguem
+# fixar. Quem responde por isso e quem responde pelo conteudo — o mesmo dono de
+# `/glossary/` e `/classification/`, e nao quem mantem Rust.
+/scripts/package-vocabulario.sh              @sua-org/data-stewards @sua-org/encarregado-dados
+/.github/workflows/release-vocabulario.yml   @sua-org/data-stewards @sua-org/encarregado-dados

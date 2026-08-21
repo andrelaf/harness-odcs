@@ -37,7 +37,7 @@ Três consequências, e são elas que justificam o desenho:
    anotar e resumir custariam três verificações. Por isso `check --saida` grava
    e `report` só relê.
 3. **Portar para outro CI custa um renderizador.** O que muda entre GitHub e
-   Azure DevOps é uma função de ~30 linhas em `src/check.rs` e este arquivo
+   Azure DevOps é uma função de ~30 linhas em `crates/laudo/src/check.rs` e este arquivo
    YAML. O veredito não se move. Veja [Azure DevOps](#portar-para-azure-devops).
 
 ---
@@ -236,7 +236,7 @@ no binário e o `report.json` é neutro de plataforma.
 | Artefatos do `actions/upload-artifact` | `PublishPipelineArtifact@1` sobre `evidence/` e `trace/` |
 
 O renderizador novo é uma variante em `desenhar()` (`src/main.rs`) e uma função
-irmã de `github()` (`src/check.rs`). Nada mais precisa saber que existe outro
+irmã de `github()` (`crates/laudo/src/check.rs`). Nada mais precisa saber que existe outro
 CI — e é para isso que o `report.json` está no meio do caminho.
 
 ### Os aprovadores, por grupo do AD

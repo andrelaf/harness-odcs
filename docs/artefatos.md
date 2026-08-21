@@ -66,7 +66,14 @@ julgamento.**
 
 ### Efêmero — vive num run, não vai para o repositório
 
-`evidence/<run_id>/`, regenerável a partir do contrato e do critério:
+`evidence/<run_id>/`, regenerável a partir do contrato e do critério.
+
+**O conteúdo depende de quem executou**, e vale saber antes de procurar um
+arquivo que não vai estar lá. O `check` calcula tudo de uma vez, pelo `compor`,
+e não passa pelas fases; o `next` atravessa fase a fase e deixa o artefato de
+cada uma.
+
+Um run de **`check`** — o que o CI executa:
 
 | Arquivo | O que é |
 |---|---|
@@ -80,11 +87,52 @@ julgamento.**
 | `laudo.md`, `laudo.html`, `laudo.proposta.json` | os documentos propostos |
 | `report.json` | **o contrato de saída** — veredito, defeitos, gate, propostas |
 
+Um run de **`next`** acrescenta o que cada fase produz, mais a saída bruta
+numerada de `bearings`, `smoke`, `pick` e `handoff`:
+
+| Arquivo | Fase |
+|---|---|
+| `f1-relatorio.html` | F1 — o contrato desenhado, depois do lint passar |
+| `f2-mapeamento.json`, `f2-mapeamento.md`, `f2-cobertura.json` | F2 — campo a termo, e a cobertura |
+| `f3-classificacao.json`, `f3-classificacao.md`, `f3-cobertura.json` | F3 — termo a classificação |
+| `f4-relatorio.md`, `f4-veredito.json` | F4 — o gate |
+
 `trace/<run_id>.jsonl` — uma linha por transição, append-only, com `duration_ms`
 e `exit_code`. É dele que a medição é derivada; não há contador paralelo.
 
-No pipeline, `evidence/` e `trace/` sobem como **artefato do job**, com retenção
-de 30 dias. No repositório de contratos eles são ignorados pelo `.gitignore`.
+### Onde a evidência vive, e por quanto tempo
+
+Em nenhum dos três lugares ela é versionada:
+
+| Onde | Retenção |
+|---|---|
+| Pipeline | anexo do job, **só quando reprova** — 30 dias no GitHub, política do projeto no Azure |
+| Repositório de contratos | ignorada pelo `.gitignore` |
+| Aqui | ignorada pelo `.gitignore` |
+
+**No caminho feliz o anexo não sobe.** O laudo já foi commitado ao lado do
+contrato e o corpo dele está no comentário do pull request — 226 KB por
+contrato, por push, duplicariam o que já está no diff. Quando reprova de
+verdade é o oposto: sem proposta válida não há laudo a registrar, e a saída
+bruta do container é o único material que existe. Gate aberto não conta como
+reprovar; código de saída **vazio** conta, porque significa que a verificação
+nem chegou a rodar.
+
+**A retenção não é promessa nossa** — é o padrão da plataforma, e cada
+organização a configura. No Azure DevOps ela nem é do anexo: é da execução
+inteira. Encurtá-la não fere auditoria nenhuma, e a razão está nas duas seções
+seguintes: o que a auditoria abre está versionado ao lado do contrato, e a
+prova do que a ferramenta disse está no `trace/`. O anexo é depuração.
+
+A última linha era a exceção até a evidência acumular 5,3 MB em 27 runs — quinze
+vezes o `trace/`, que tem o dobro de runs. Ignorá-la aqui não é mudança de
+política: é este repositório passando a obedecer a que já estava escrita no
+título desta seção.
+
+**O trace não fica pendurado sem ela.** Ele guarda `evidence=<arquivo>
+sha256=<hash>` por chamada de ferramenta, e não o conteúdo — foi desenhado assim
+justamente porque é o trace que circula. O hash continua provando o que a
+ferramenta disse, mesmo com o arquivo fora do repositório.
 
 ### Permanente — versionado ao lado do contrato
 

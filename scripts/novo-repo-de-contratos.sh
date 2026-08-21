@@ -23,31 +23,62 @@ TEMPLATE="$HARNESS_ROOT/templates/repo-de-contratos"
 
 DESTINO="${1:-}"
 [ -n "$DESTINO" ] || {
-    echo "uso: $0 /caminho/do/repo-de-contratos [versao]" >&2
-    echo "     a versao e opcional; sem ela, usa o ultimo release publicado" >&2
+    echo "uso: $0 /caminho/do/repo-de-contratos [versao] [versao-do-vocabulario]" >&2
+    echo "     as versoes sao opcionais; sem elas, usa o ultimo release de cada" >&2
     exit 2
 }
 
 REPO="${HARNESS_REPO_ORIGEM:-andrelaf/harness-odcs}"
 VERSAO="${2:-}"
+VOCAB_VERSAO="${3:-}"
 
-# --- A versao fixada ---------------------------------------------------------
+# Ultimo release cujo `tag_name` casa com o prefixo dado, do mais novo para o
+# mais velho — que e a ordem em que a API os devolve.
 #
-# Descoberta aqui, gravada la. O repositorio de contratos nunca "pega a ultima":
-# ele aponta para uma versao e um sha256 especificos, e subir de versao passa a
-# ser um pull request revisado.
-echo "== resolvendo a versao do pacote =="
-if [ -z "$VERSAO" ]; then
-    VERSAO="$(curl -fsSL "https://api.github.com/repos/$REPO/releases/latest" \
-        | sed -n 's/.*"tag_name" *: *"\([^"]*\)".*/\1/p' | head -1)"
-    [ -n "$VERSAO" ] || { echo "nao consegui descobrir o ultimo release de $REPO" >&2; exit 1; }
-fi
+# **Nao** usa `/releases/latest`.** A ferramenta e o vocabulario publicam no
+# mesmo repositorio, e aquele endpoint devolve o release mais recente qualquer
+# que seja o fluxo: um `vocab-v1.2.0` publicado hoje viraria a versao "mais
+# nova" do binario, e o pin sairia apontando para um tarball que nao existe.
+# O `tr ',' '\n'` nao e decorativo: sem ele o resultado depende de a API
+# devolver JSON formatado. Numa linha unica, o `.*` guloso do sed casaria com a
+# **ultima** ocorrencia de `tag_name` — o release mais velho da pagina — e o pin
+# sairia apontando para tras sem nenhum erro. Uma linha por campo torna a
+# resposta independente do espacamento de quem a serve.
+ultimo_release() {
+    curl -fsSL "https://api.github.com/repos/$REPO/releases" \
+        | tr ',' '\n' \
+        | sed -n 's/.*"tag_name" *: *"\('"$1"'[^"]*\)".*/\1/p' \
+        | head -1
+}
 
-SHA="$(curl -fsSL "https://github.com/$REPO/releases/download/$VERSAO/harness-odcs-linux-x64.tar.gz.sha256" \
-    | cut -d' ' -f1)"
+sha_do_asset() {
+    curl -fsSL "https://github.com/$REPO/releases/download/$1/$2.sha256" | cut -d' ' -f1
+}
+
+# --- As versoes fixadas ------------------------------------------------------
+#
+# Descobertas aqui, gravadas la. O repositorio de contratos nunca "pega a
+# ultima": ele aponta para versoes e sha256 especificos, e subir qualquer uma
+# delas passa a ser um pull request revisado.
+#
+# Sao duas porque respondem a duas perguntas diferentes — "que codigo julgou?" e
+# "sob qual vocabulario?" — e mudam em cadencias diferentes.
+echo "== resolvendo as versoes =="
+[ -n "$VERSAO" ] || VERSAO="$(ultimo_release 'v[0-9]')"
+[ -n "$VERSAO" ] || { echo "nao consegui descobrir o ultimo release de $REPO" >&2; exit 1; }
+
+SHA="$(sha_do_asset "$VERSAO" harness-odcs-linux-x64.tar.gz)"
 [ -n "$SHA" ] || { echo "release $VERSAO nao publicou o sha256 — foi um release completo?" >&2; exit 1; }
-echo "  $REPO@$VERSAO"
-echo "  sha256 $SHA"
+echo "  ferramenta   $REPO@$VERSAO"
+echo "               sha256 $SHA"
+
+[ -n "$VOCAB_VERSAO" ] || VOCAB_VERSAO="$(ultimo_release 'vocab-v')"
+[ -n "$VOCAB_VERSAO" ] || { echo "nao consegui descobrir o ultimo vocabulario de $REPO" >&2; exit 1; }
+
+VOCAB_SHA="$(sha_do_asset "$VOCAB_VERSAO" harness-vocab.tar.gz)"
+[ -n "$VOCAB_SHA" ] || { echo "release $VOCAB_VERSAO nao publicou o sha256 do vocabulario" >&2; exit 1; }
+echo "  vocabulario  $REPO@$VOCAB_VERSAO"
+echo "               sha256 $VOCAB_SHA"
 
 # --- O template --------------------------------------------------------------
 echo
@@ -58,7 +89,7 @@ mkdir -p "$DESTINO"
 cp -R "$TEMPLATE/." "$DESTINO/"
 
 cat > "$DESTINO/harness.lock" <<EOF
-# Pacote de validacao — versao fixada.
+# Pacotes de validacao — versoes fixadas.
 #
 # Gerado por \`novo-repo-de-contratos.sh\`. Este arquivo e a unica declaracao de
 # qual criterio julga os contratos deste repositorio: o pipeline le daqui, e
@@ -71,9 +102,22 @@ cat > "$DESTINO/harness.lock" <<EOF
 # Subir de versao pode reclassificar campos sem que nenhum contrato mude. Por
 # isso e um pull request revisado, com dono proprio no CODEOWNERS.
 
+# --- A ferramenta: que codigo julga ---------------------------------------
 HARNESS_REPO=$REPO
 HARNESS_VERSAO=$VERSAO
 HARNESS_SHA256=$SHA
+
+# --- O criterio: sob qual vocabulario -------------------------------------
+#
+# Pin separado porque e outra pergunta de auditoria e outra cadencia: um termo
+# novo no glossario nao deveria exigir um binario novo, e uma correcao no
+# binario nao deveria mexer no criterio.
+#
+# No dia em que o vocabulario ganhar repositorio proprio — com dono proprio,
+# que e o ponto — muda so a primeira destas tres linhas.
+HARNESS_VOCAB_REPO=$REPO
+HARNESS_VOCAB_VERSAO=$VOCAB_VERSAO
+HARNESS_VOCAB_SHA256=$VOCAB_SHA
 EOF
 
 mkdir -p "$DESTINO/contracts"

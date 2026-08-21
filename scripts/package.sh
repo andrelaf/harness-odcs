@@ -13,16 +13,23 @@
 #     harness.sh                     entrypoint — nao compila nada
 #     bin/harness-odcs[.exe]         o binario, em release
 #     scripts/env.sh                 a configuracao, fonte unica
-#     glossary/                      o criterio
-#     classification/                o criterio
-#     VERSION                        versao, commit e sha256 do vocabulario
+#     VERSION                        versao, commit e a imagem do motor
 #
-# O vocabulario vai **dentro** do pacote nesta versao. E uma escolha reversivel,
-# nao uma conviccao: `HARNESS_VOCAB` aponta para onde se quiser, e no dia em que
-# o glossario tiver repositorio proprio, o pacote deixa de carrega-lo e o
-# pipeline passa a fixar duas versoes em vez de uma. O que nao pode e o
-# vocabulario morar no repositorio de contratos: quem escreve o contrato nao
-# escreve o criterio que o julga.
+# --- O vocabulario nao vem mais aqui
+#
+# Ele vinha, e sair foi o plano desde entao: `HARNESS_VOCAB` sempre apontou para
+# onde se quisesse, e este cabecalho ja dizia que "no dia em que o glossario
+# tiver versao propria, o pacote deixa de carrega-lo e o pipeline passa a fixar
+# duas versoes em vez de uma". E este dia.
+#
+# O motivo e cadencia, nao arrumacao: com o vocabulario aqui dentro, cadastrar
+# `segmento` exigia compilar Rust e publicar um release do binario. Um data
+# steward nao deveria depender disso para acrescentar um termo.
+#
+# Agora sao dois pacotes, dois pins e dois donos possiveis — `package-vocabulario.sh`
+# monta o outro. O que continua valendo e que o vocabulario **nao** mora no
+# repositorio de contratos: quem escreve o contrato nao escreve o criterio que
+# o julga.
 set -eu
 
 HARNESS_ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
@@ -55,17 +62,16 @@ cp "$HARNESS_ROOT/scripts/imagem.sh" "$DESTINO/scripts/"
 cp "$HARNESS_ROOT/scripts/harness.sh" "$DESTINO/harness.sh"
 chmod +x "$DESTINO/harness.sh" "$DESTINO/scripts/imagem.sh" "$DESTINO/bin/harness-odcs$EXE"
 
-cp -r "$HARNESS_ROOT/glossary" "$DESTINO/"
-cp -r "$HARNESS_ROOT/classification" "$DESTINO/"
-
 # A procedencia, dentro do pacote. Sem isto, um pacote extraido num runner e
-# um diretorio anonimo, e "qual criterio julgou este contrato?" deixa de ter
-# resposta fora do laudo.
+# um diretorio anonimo.
+#
+# O sha256 do glossario e do catalogo **saiu daqui** junto com os arquivos: a
+# procedencia do criterio agora e do pacote do vocabulario, que tem VERSION
+# propria. Manter os hashes aqui seria afirmar sobre um conteudo que este
+# pacote nao carrega e nao controla — e que muda numa cadencia diferente.
 {
     echo "harness-odcs $(git -C "$HARNESS_ROOT" describe --tags --always --dirty 2>/dev/null || echo sem-tag)"
     echo "commit       $(git -C "$HARNESS_ROOT" rev-parse HEAD 2>/dev/null || echo '-')"
-    echo "glossario    $(sha256_de "$HARNESS_ROOT/glossary/glossario.yaml")"
-    echo "catalogo     $(sha256_de "$HARNESS_ROOT/classification/catalogo-lgpd.yaml")"
     echo "dc_image     $DC_IMAGE"
     echo "dc_digest    $DC_DIGEST"
 } > "$DESTINO/VERSION"

@@ -30,28 +30,34 @@ O [`docs/brief.md`](brief.md) fecha com um checklist. Onde cada item está hoje:
 
 | Critério | Como este projeto responde |
 |---|---|
-| **Determinismo** | Ordem de fases explícita em `flow.rs`, teto de passos que **aborta** com exit `3`, e uma tabela de transições exercitada em `tests/flow.rs` (11 testes só disso). Um `FAIL` para no passo em que ocorreu — não tenta a próxima fase. |
+| **Determinismo** | Ordem de fases explícita em `flow.rs`, teto de passos que **aborta** com exit `3`, e uma tabela de transições exercitada em `crates/harness/tests/flow.rs` (11 testes só disso). Um `FAIL` para no passo em que ocorreu — não tenta a próxima fase. |
 | **Portabilidade** | A política vive em `run.sh` + binário compilado. Nada em `.cursorrules`, tasks de IDE ou config de editor. Prova adicional que o brief não pedia: a mesma política atravessou **GitHub Actions e um repositório separado**, sem reescrever regra. |
 | **Verificação** | Nenhuma feature fecha sem `verify` PASS. Além disso, cada execução deixa `evidence/<run_id>/` com a saída bruta de toda ferramenta externa. |
 | **Medição** | `./run.sh metrics` deriva de `trace/` — não há contador paralelo. 14 runs medidos: 81,5 s somados, **99,6% em espera de container**. A leitura honesta está em `decisao.md`. |
 | **Decisão** | [`decisao.md`](decisao.md) diz onde se paga e, com o mesmo peso, onde uma alternativa simples vence. |
 
-### O que falta para fechar o checklist do curso
+### O que faltava para fechar o checklist do curso
 
-Dois itens do brief não foram produzidos, e vale saber antes da apresentação:
+Dois itens do brief ficaram pendentes até depois da Semana 2, e hoje estão
+prontos — vale saber que a pendência existiu, porque ela é parte da história:
 
-**`BACKLOG-FUTURO.md` não existe.** O brief da Semana 2 pede que o escopo seja
-congelado e que tudo o que sobrar vá para esse arquivo. O escopo *foi* congelado
-na prática — as 4 features não cresceram —, mas o arquivo que registra o que
-ficou de fora nunca foi escrito.
+**`BACKLOG-FUTURO.md`.** O brief da Semana 2 pede que o escopo seja congelado e
+que tudo o que sobrar vá para esse arquivo. O escopo *foi* congelado na prática
+— as 4 features não cresceram —, mas o arquivo que registra o que ficou de fora
+só foi escrito depois. Está em [`BACKLOG-FUTURO.md`](../BACKLOG-FUTURO.md), e
+desde então passou a ser onde as decisões de escopo são discutidas: é lá que
+`sugerir` foi separado de `termos`, que a linha de corte do escopo está
+registrada, e que cada item recusado carrega **a condição que o desbloquearia**
+em vez de uma estimativa de esforço. A mais frequente delas é *"alguém precisar
+disso"*.
 
-**`docs/portabilidade.md` não existe.** A Semana 2 pede prova registrada de que
-o mesmo fluxo roda nas duas IDEs — screenshots, trace de ambas, ou o documento.
-A portabilidade é real (nada de IDE vazou para a política), mas **não está
-provada por escrito**, e é o critério que o brief chama de "o grande item da
-semana".
+**`docs/portabilidade.md`.** A Semana 2 pede prova registrada de que o mesmo
+fluxo roda nas duas IDEs — o critério que o brief chama de "o grande item da
+semana". A portabilidade sempre foi real (nada de IDE vazou para a política),
+mas ficou um tempo **sem prova escrita**. Está em
+[`portabilidade.md`](portabilidade.md).
 
-São os dois documentos que eu escreveria antes do Demo Day.
+O checklist do brief está fechado.
 
 ---
 
@@ -83,8 +89,14 @@ otimizar o Rust não paga.
 
 **`state/progress.json` e a máquina de estados, depois que o domínio ficou
 pronto.** O `check` — que é o que o CI roda hoje, e o que o processo real usa —
-**não usa a máquina de estados**. Ele carrega o estado só porque a struct `Run`
-exige, e nunca o salva. Não avança feature, não conta passo, não fecha ciclo.
+**não usa a máquina de estados**. Não avança feature, não conta passo, não fecha
+ciclo.
+
+> Este parágrafo dizia, até a divisão em crates, que o `check` *"carrega o
+> estado só porque a struct `Run` exige, e nunca o salva"*. Era verdade, e era
+> uma observação de prosa sobre uma coisa que o código permitia. Hoje o `check`
+> monta um [`Ctx`](../crates/laudo/src/ctx.rs), que não tem onde guardar estado
+> de fluxo, e as duas leituras de disco sumiram por impossibilidade.
 
 Isso não foi acidente, foi necessidade: três pull requests abertos ao mesmo
 tempo disputariam `state/progress.json`, e cada execução de CI viraria um commit
@@ -115,6 +127,27 @@ a disciplina de evidência.
 Dito de outro jeito: o harness foi um bom **andaime**. O que ficou de pé depois
 que o andaime saiu foi o `check` — determinístico, sem estado, e chamável de
 qualquer lugar.
+
+**E isso deixou de ser uma leitura para virar a estrutura do repositório.** Onde
+havia um crate, há dois:
+
+```
+crates/laudo/     o produto — contrato, glossário, catálogo, gate, laudo
+crates/harness/   o andaime — fases, transições, progresso, medição
+src/main.rs       o CLI, único lugar que importa dos dois
+```
+
+A dependência aponta `harness → laudo`, e **nunca** o contrário — não por
+convenção: `laudo` não declara `harness` no `Cargo.toml`, então um `use
+harness::` lá dentro não compila. A frase "o produto não precisa do andaime"
+deixou de ser algo que este documento afirma e passou a ser algo que o
+compilador recusa.
+
+A costura entre os dois é um arquivo só,
+[`harness/src/dispatch.rs`](../crates/harness/src/dispatch.rs): dado
+`(feature, fase)`, qual função de domínio atende. É o único lugar do projeto que
+precisa saber as duas coisas ao mesmo tempo — e o tamanho dele, quarenta linhas,
+é a medida de quão pouco os dois lados realmente se tocam.
 
 Isso não invalida o exercício; explica onde ele se paga. Um harness com máquina
 de estados se paga enquanto há **trabalho sequencial a conduzir**. Quando o

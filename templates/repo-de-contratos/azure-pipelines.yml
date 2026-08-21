@@ -29,6 +29,17 @@ pr:
 pool:
   vmImage: ubuntu-latest
 
+# Onde esta o criterio. O pacote da ferramenta nao carrega mais o vocabulario —
+# ele tem release e pin proprios —, e sem esta variavel o harness cairia no
+# default, que e o proprio diretorio dele, e pararia dizendo que nao achou o
+# glossario.
+#
+# Variavel de pipeline em vez de `export` em cada passo: o Azure a entrega como
+# variavel de ambiente para todo `script`, e uma copia por passo divergiria no
+# dia em que alguem acrescentasse um passo sem ela.
+variables:
+  HARNESS_VOCAB: $(Agent.TempDirectory)/harness-vocab
+
 steps:
   - checkout: self
     # DIVERGE: necessario para o passo que commita o laudo de volta na branch.
@@ -65,6 +76,44 @@ steps:
       tar -C "$(Agent.TempDirectory)" -xzf "$(Agent.TempDirectory)/harness.tar.gz"
       cat "$(Agent.TempDirectory)/harness-odcs/VERSION"
     displayName: extrair e mostrar a procedencia
+
+  # --- 1b. O criterio ----------------------------------------------------
+  #
+  # Os mesmos tres passos, para o outro pin. E aqui esta a resposta pratica
+  # para "isto funciona no Azure?": funciona porque o mecanismo escolhido foi
+  # `curl` + `sha256sum` + `tar`, que existem em qualquer agente. Nao ha
+  # `checkout` multi-repo, nao ha service connection, nao ha feed de
+  # artefatos — nada que exista de um lado so.
+  #
+  # DIVERGE: vale o mesmo aviso do pacote da ferramenta. `curl` resolve
+  # enquanto o repositorio do vocabulario for publico; sendo privado, troque
+  # por chamada autenticada. E o mesmo problema de sempre, agora em dobro —
+  # nao um problema novo.
+  - script: |
+      set -eu
+      . ./harness.lock
+      curl -fsSL -o "$(Agent.TempDirectory)/harness-vocab.tar.gz" \
+        "https://github.com/$HARNESS_VOCAB_REPO/releases/download/$HARNESS_VOCAB_VERSAO/harness-vocab.tar.gz"
+    displayName: baixar o vocabulario
+
+  - script: |
+      set -eu
+      . ./harness.lock
+      obtido="$(sha256sum "$(Agent.TempDirectory)/harness-vocab.tar.gz" | cut -d' ' -f1)"
+      if [ "$obtido" != "$HARNESS_VOCAB_SHA256" ]; then
+        echo "##vso[task.logissue type=error]o vocabulario baixado nao e o fixado em harness.lock"
+        echo "  esperado : $HARNESS_VOCAB_SHA256"
+        echo "  obtido   : $obtido"
+        exit 1
+      fi
+      echo "sha256 confere: $obtido"
+    displayName: conferir o sha256 do vocabulario
+
+  - script: |
+      set -eu
+      tar -C "$(Agent.TempDirectory)" -xzf "$(Agent.TempDirectory)/harness-vocab.tar.gz"
+      cat "$(Agent.TempDirectory)/harness-vocab/VERSION"
+    displayName: extrair o vocabulario e mostrar a procedencia
 
   # --- 2. O motor de validacao -------------------------------------------
   - script: "$(Agent.TempDirectory)/harness-odcs/scripts/imagem.sh"
@@ -121,9 +170,30 @@ steps:
     displayName: resumo
     condition: always()
 
+  # A evidencia sobe **so quando reprova**, e nao a cada push — mesma regra da
+  # esteira do GitHub, e pelo mesmo motivo.
+  #
+  # No caminho feliz ela e redundante: o laudo foi commitado na branch pelo
+  # passo `aplicar` e o corpo dele ja esta no comentario. Guardar 226 KB por
+  # contrato, por push, para duplicar o que esta no diff e custo sem leitor.
+  #
+  # Quando reprova de verdade e o oposto: sem proposta valida nao ha laudo a
+  # registrar, e a saida bruta do container e o unico material que existe.
+  #
+  # DIVERGE: a retencao nao e do anexo, e da execucao inteira — vem da politica
+  # do projeto, e nao deste arquivo. Uma organizacao que a encurte para dias
+  # nao perde nada de auditoria: o laudo esta commitado ao lado do contrato, e
+  # o trace guarda o sha256 de cada arquivo de evidencia. Aqui e depuracao.
+  #
+  # `5` — gate aberto — nao conta como reprovar: o laudo foi emitido e esta no
+  # comentario. Codigo **vazio** conta, porque significa que a verificacao nem
+  # chegou a rodar, e ai o anexo e o que sobra para depurar.
   - publish: evidence
     artifact: evidencia-$(Build.BuildId)
-    condition: always()
+    condition: >-
+      or(failed(),
+         eq(variables['codigo'], ''),
+         and(ne(variables['codigo'], '0'), ne(variables['codigo'], '5')))
     displayName: artefatos
 
   # `5` — gate aberto — nao reprova: falta decisao humana, e quem segura o merge

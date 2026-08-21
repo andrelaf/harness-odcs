@@ -13,8 +13,11 @@ cargo fmt --all
 
 echo
 echo "== clippy =="
-cargo clippy --all-targets -- -D warnings
+cargo clippy --workspace --all-targets -- -D warnings
 
 echo
 echo "== testes =="
-cargo test
+# `--workspace` nao e enfeite. A raiz do workspace tambem e um pacote — o
+# binario —, e `cargo test` sem a flag roda **so ele**: zero testes, saida
+# verde. O guarda do release cairia nisso em silencio.
+cargo test --workspace

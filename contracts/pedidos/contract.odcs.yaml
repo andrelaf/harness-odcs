@@ -20,14 +20,26 @@ schema:
     description: Identificador do documento, gerado pelo MongoDB.
     required: true
     unique: true
+    classification: internal
+    authoritativeDefinitions:
+    - url: glossary/glossario.yaml#registro.identificador_tecnico
+      type: businessDefinition
   - name: data_pedido
     logicalType: date
     description: Momento em que o pedido foi criado.
     required: true
+    classification: internal
+    authoritativeDefinitions:
+    - url: glossary/glossario.yaml#pedido.data
+      type: businessDefinition
   - name: valor_total
     logicalType: number
     description: Valor total do pedido em reais.
     required: true
+    classification: internal
+    authoritativeDefinitions:
+    - url: glossary/glossario.yaml#pedido.valor_total
+      type: businessDefinition
   - name: cliente
     logicalType: object
     description: Dados do cliente, embutidos no documento do pedido — padrao comum em MongoDB para evitar join.
@@ -81,3 +93,9 @@ schema:
       - name: data_nascimento_recebedor
         logicalType: date
         description: Data de nascimento de quem recebeu, coletada na entrega.
+        classification: confidential
+        tags:
+        - pii
+        authoritativeDefinitions:
+        - url: glossary/glossario.yaml#pessoa.data_nascimento
+          type: businessDefinition
