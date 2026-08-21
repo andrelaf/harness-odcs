@@ -1,11 +1,18 @@
 # Convencao de nome de branch.
 #
 # Este e o unico check do repositorio que reprova por **processo** em vez de
-# conteudo, e o unico com regra escrita em YAML. A excecao e deliberada: a regra
-# fala de git, nao de contrato de dados. O binario nunca ve um nome de branch, e
-# nao deveria ver — `check` responde sobre o contrato, e so.
+# conteudo, e o unico com regra escrita em YAML. A excecao e deliberada: as
+# regras falam de git, nao de contrato de dados. O binario nunca ve um nome de
+# branch nem um modo de arquivo, e nao deveria ver — `check` responde sobre o
+# contrato, e so.
 #
-# A regra em si esta em docs/git-flow.md. Aqui esta a verificacao dela.
+# Duas regras moram aqui:
+#
+#   nome da branch          a regra esta em docs/git-flow.md
+#   bit de execucao do .sh  a regra estava so num comentario, e falhou
+#
+# Roda em segundos e sem container, e e por isso que cabe a ele carregar o que
+# nao vale um job proprio.
 
 name: convencao
 
@@ -47,4 +54,41 @@ jobs:
           echo "O head de um pull request nao se renomeia: este PR precisa ser"
           echo "fechado e reaberto na branch nova. E o motivo de este check ser"
           echo "o primeiro do arquivo — errar o nome custa mais depois."
+          exit 1
+
+      # O checkout so e necessario a partir daqui: a regra de nome le
+      # `github.head_ref` do evento e nao toca no disco.
+      - uses: actions/checkout@v4
+
+      # No Windows `core.fileMode` e `false`, entao `chmod +x` local nao vira
+      # commit. Script que chega ao runner como 100644 falha com "permission
+      # denied", tres passos de distancia da causa.
+      #
+      # **Isto ja estava escrito em prosa no `.gitattributes`, e nao funcionou.**
+      # `package-vocabulario.sh` nasceu com 644 depois do aviso e derrubou o
+      # primeiro `vocab-v1.1.0`. Quem escreve o script seguinte nao esta lendo o
+      # `.gitattributes` — por isso a regra virou verificacao.
+      #
+      # `git ls-files -s` le o **indice**, e nao o disco: e o modo que foi
+      # commitado que importa, e ele e o mesmo em qualquer plataforma.
+      - name: script com bit de execucao
+        run: |
+          # `|| true` porque `grep` sem casamento sai 1, e a atribuicao propaga
+          # o codigo para o `-e` do shell do Actions.
+          faltando=$(git ls-files -s '*.sh' | grep '^100644' | cut -f2- || true)
+
+          if [ -z "$faltando" ]; then
+            echo "::notice::todo \`.sh\` versionado tem bit de execucao"
+            exit 0
+          fi
+
+          # A mensagem carrega a correcao inteira, mesmo criterio da regra de
+          # nome: erro de processo que obriga a abrir a documentacao custa mais
+          # que o erro.
+          echo "::error::script versionado sem bit de execucao — chega ao runner como 100644 e falha com 'permission denied'. Corrija com \`git update-index --chmod=+x <arquivo>\` e commite."
+          echo
+          echo "$faltando" | while IFS= read -r arquivo; do
+            echo "  git update-index --chmod=+x $arquivo"
+          done
+          echo
           exit 1

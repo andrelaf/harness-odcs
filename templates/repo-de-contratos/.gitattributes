@@ -9,3 +9,14 @@
 *.yaml text eol=lf
 *.yml  text eol=lf
 harness.lock text eol=lf
+
+# O laudo e comparado byte a byte com o que a verificacao produz: e assim que o
+# `check` recusa um laudo que nao corresponde ao criterio. Sem o pin, o mesmo
+# arquivo tem dois conteudos conforme quem fez o checkout, e no Windows o
+# `check` reprova um laudo **correto** — o CI e a maquina de quem desenvolve
+# passam a discordar sobre o mesmo contrato, que e exatamente o que o cabecalho
+# de `check.rs` diz que nao pode acontecer.
+#
+# Cobre os tres do trio, e nao so o `.md`: o `.proposta.json` e o `.html` sao
+# comparados pela mesma funcao.
+contracts/**/laudos/** text eol=lf
