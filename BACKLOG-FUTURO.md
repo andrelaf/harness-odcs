@@ -231,6 +231,25 @@ repositório de contratos, onde ele seria ruído em N pull requests.
 Depende de um baseline: comparar veredito exige guardar o anterior. Hoje o
 workflow só sabe o resultado da execução atual.
 
+**Trava para o bit de execução dos scripts.** O `.gitattributes` avisa em prosa
+que script novo em `scripts/` precisa de `git update-index --chmod=+x`, porque
+no Windows `core.fileMode` é `false` e o `chmod` local não vira commit. O aviso
+não funcionou: `package-vocabulario.sh` nasceu com `100644` **depois** dele, e
+derrubou o primeiro `vocab-v1.1.0` no passo que monta o pacote.
+
+Nota em comentário não é trava — quem escreve o script seguinte não está lendo
+o `.gitattributes`. A verificação cabe numa linha e roda em qualquer
+plataforma:
+
+```sh
+git ls-files -s '*.sh' | grep 100644 && { echo "script sem bit de execucao"; exit 1; }
+```
+
+O lugar dela é o workflow `convencao`, que já é o único que reprova por
+processo e já roda em segundos sem container. Ficou de fora do commit que
+consertou o modo porque ali o release estava parado, e misturar a trava com o
+desbloqueio faria os dois esperarem a mesma revisão.
+
 ## Descartado, e por quê
 
 **Laudo em PDF como registro.** A autoridade do laudo vem de estar no git, preso
