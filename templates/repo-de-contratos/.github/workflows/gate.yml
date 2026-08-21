@@ -84,11 +84,30 @@ jobs:
             {
               echo "### \`$contrato\`"
               echo
-              jq -r '"Glossario v\(.glossario_versao) · catalogo v\(.catalogo_versao) · pedido \`\(.gate_sha256[0:16])\`"' "$proposta"
+              jq -r '"Glossario v\(.glossario_versao) · catalogo v\(.catalogo_versao) · pedido `\(.gate_sha256[0:16])`"' "$proposta"
               echo
+
+              # O laudo casa pelo sha do **contrato**, e o contrato pode nao
+              # ter mudado num pull request que so sobe o pin. Ai a tabela e
+              # verdadeira sobre o que foi decidido, e desatualizada sobre a
+              # regua — e aprovar sem saber disso e aprovar a coisa errada.
+              fixada=$(. ./harness.lock >/dev/null 2>&1; echo "${HARNESS_VOCAB_VERSAO:-}")
+              emitida=$(jq -r '.glossario_versao' "$proposta")
+              case "$fixada" in
+                *"$emitida"*) ;;
+                '') ;;
+                *)
+                  echo "> **Laudo emitido sob outra regua.** Esta tabela vem de um laudo"
+                  echo "> gerado com glossario v$emitida, e o \`harness.lock\` fixa"
+                  echo "> \`$fixada\`. A esteira \`contrato\` reemite o laudo nesta"
+                  echo "> branch — o que esta abaixo vale para o criterio antigo."
+                  echo
+                  ;;
+              esac
+
               echo "| Tipo | Campo | O que esta em decisao |"
               echo "|---|---|---|"
-              jq -r '.gate[] | "| \`\(.tipo)\` | \`\(.campo)\` | \(.detalhe) |"' "$proposta"
+              jq -r '.gate[] | "| `\(.tipo)` | `\(.campo)` | \(.detalhe) |"' "$proposta"
               echo
             } >> "$GITHUB_STEP_SUMMARY"
           done
@@ -144,7 +163,7 @@ jobs:
             echo
             echo "1. leia o laudo no [comentario da esteira](${{ github.event.pull_request.html_url }}), campo a campo"
             echo "2. confira a tabela acima — lacuna segue **sem classificacao** no contrato"
-            echo "3. aplique o rotulo `$ROTULO`"
+            echo "3. aplique o rotulo \`$ROTULO\`"
           } >> "$GITHUB_STEP_SUMMARY"
 
           echo "::error::aguardando decisao humana"
