@@ -33,10 +33,14 @@ máquina. Esse fato, e não uma estimativa de esforço, decidiu cada linha abaix
 falta de tempo: cada item tem uma condição escrita que ainda não aconteceu, e a
 mais frequente delas é *"alguém precisar disso"*.
 
-**Uma coisa não é escopo e continua pendente:** publicar `v0.8.0` e
-`vocab-v1.1.0`. O `novo-repo-de-contratos.sh` reprova de propósito até existir
-um release `vocab-v*`, e repositório de contratos que já existe precisa do
-workflow novo mais as três linhas novas no `harness.lock`, no mesmo commit.
+**O que não era escopo e ficou resolvido em 2026-08-21:** `v0.8.0` e
+`vocab-v1.1.0` estão publicados, e a cadeia de distribuição foi exercitada pela
+primeira vez de ponta a ponta — `novo-repo-de-contratos.sh` resolveu os dois
+releases e gravou versão e sha256 de cada um no `harness.lock` gerado.
+
+**O que continua pendente é do outro lado:** repositório de contratos que já
+existe precisa do workflow novo mais as três linhas novas no `harness.lock`, no
+mesmo commit. Isso é migração de consumidor, e não tem consumidor ainda.
 
 ---
 
