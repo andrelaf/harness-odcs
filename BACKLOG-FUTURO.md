@@ -26,6 +26,8 @@ máquina. Esse fato, e não uma estimativa de esforço, decidiu cada linha abaix
 | `evidence/` fora do versionamento | este repositório passou a obedecer a regra que ele mesmo escreveu |
 | Vocabulário no comentário do PR | quem tem lacuna passou a ver o que existe, com os aliases |
 | Carimbo de identidade na reprovação | reprovar deixou de apontar para um caminho — diz o sha256 do arquivo e a versão da régua em vigor |
+| Fim de linha do laudo pinado | `check` parou de reprovar no Windows um laudo que a esteira aprova |
+| Bit de execução verificado no CI | o aviso em prosa do `.gitattributes` virou regra — ele já tinha falhado duas vezes |
 
 **O que ficou de fora, e é o resto deste arquivo.** Nada aqui está adiado por
 falta de tempo: cada item tem uma condição escrita que ainda não aconteceu, e a
@@ -230,6 +232,14 @@ repositório de contratos, onde ele seria ruído em N pull requests.
 
 Depende de um baseline: comparar veredito exige guardar o anterior. Hoje o
 workflow só sabe o resultado da execução atual.
+
+> **Entregue.** A verificação está no workflow `convencao`, que já era o único
+> que reprova por processo. `git ls-files -s '*.sh' | grep '^100644'` lê o
+> **índice**, não o disco — é o modo commitado que importa, e ele é o mesmo em
+> qualquer plataforma. A mensagem de erro carrega o `git update-index` pronto
+> para cada arquivo, mesmo critério da regra de nome de branch.
+>
+> **O texto abaixo é o registro do problema, de antes da entrega.**
 
 **Trava para o bit de execução dos scripts.** O `.gitattributes` avisa em prosa
 que script novo em `scripts/` precisa de `git update-index --chmod=+x`, porque
