@@ -25,6 +25,7 @@ máquina. Esse fato, e não uma estimativa de esforço, decidiu cada linha abaix
 | Workspace `laudo` + `harness` | a fronteira produto/andaime passou a ser recusada pelo compilador, não afirmada em prosa |
 | `evidence/` fora do versionamento | este repositório passou a obedecer a regra que ele mesmo escreveu |
 | Vocabulário no comentário do PR | quem tem lacuna passou a ver o que existe, com os aliases |
+| Carimbo de identidade na reprovação | reprovar deixou de apontar para um caminho — diz o sha256 do arquivo e a versão da régua em vigor |
 
 **O que ficou de fora, e é o resto deste arquivo.** Nada aqui está adiado por
 falta de tempo: cada item tem uma condição escrita que ainda não aconteceu, e a
@@ -195,6 +196,40 @@ Agora são **dois** pacotes, e a prioridade entre eles não é óbvia: o do bin�
 é maior e mais visível, mas quem carrega o critério é o do vocabulário — um
 catálogo forjado reclassifica campo em todo contrato que o use, sem que nenhuma
 linha de contrato mude. Se um dia só um for assinado, é esse.
+
+**Durabilidade da reprovação no pull request.** O comentário é editado no
+lugar (`gh pr comment --edit-last`), então cada push sobrescreve o anterior: no
+push que conserta, o "reprovado" vira "aprovado" e o evento desaparece. Somado
+ao anexo de 30 dias e à `evidence/` ignorada, a reprovação é efêmera por três
+mecanismos independentes.
+
+**Está certo enquanto o pull request está aberto** — o comentário é status vivo,
+não log, e postar um comentário novo por push transformaria um PR de oito
+pushes em oito comentários de ruído. E o GitHub já guarda o que importa por
+SHA: a conclusão do check run é permanente e o resumo do job carrega o corpo
+inteiro sem o teto de 60000 caracteres.
+
+A condição para mexer: alguém precisar reconstruir *a sequência* de reprovações
+de um PR — auditoria de processo, não de contrato. Se acontecer, o botão é a
+retenção do run, não um arquivo na árvore. Laudo é registro de aprovação; um
+laudo de reprovação seria nomeado pelo sha256 de um contrato que nunca entra na
+`main`, e a esteira teria de apagá-lo no push seguinte para não deixar
+documento falso no repositório de quem escreve contrato.
+
+**Agregado de reprovação no release do vocabulário.** O `release-vocabulario.yml`
+já roda `check` em todos os contratos deste repositório antes de publicar. O que
+ele não faz é dizer **quais mudaram de veredito** — e essa é a única pergunta de
+reprovação que sobrevive ao pull request: *"o que a versão nova da régua
+quebrou?"*.
+
+Num repositório de contratos isso deixa de ser hipótese: subir
+`HARNESS_VOCAB_VERSAO` faz o alvo virar todos os contratos de uma vez, e a
+reprovação passa a ser sobre o critério, não sobre o contrato. O lugar do
+registro é as notas do release, que já carregam versão e sha256 — não o
+repositório de contratos, onde ele seria ruído em N pull requests.
+
+Depende de um baseline: comparar veredito exige guardar o anterior. Hoje o
+workflow só sabe o resultado da execução atual.
 
 ## Descartado, e por quê
 

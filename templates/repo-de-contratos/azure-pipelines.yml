@@ -170,9 +170,30 @@ steps:
     displayName: resumo
     condition: always()
 
+  # A evidencia sobe **so quando reprova**, e nao a cada push — mesma regra da
+  # esteira do GitHub, e pelo mesmo motivo.
+  #
+  # No caminho feliz ela e redundante: o laudo foi commitado na branch pelo
+  # passo `aplicar` e o corpo dele ja esta no comentario. Guardar 226 KB por
+  # contrato, por push, para duplicar o que esta no diff e custo sem leitor.
+  #
+  # Quando reprova de verdade e o oposto: sem proposta valida nao ha laudo a
+  # registrar, e a saida bruta do container e o unico material que existe.
+  #
+  # DIVERGE: a retencao nao e do anexo, e da execucao inteira — vem da politica
+  # do projeto, e nao deste arquivo. Uma organizacao que a encurte para dias
+  # nao perde nada de auditoria: o laudo esta commitado ao lado do contrato, e
+  # o trace guarda o sha256 de cada arquivo de evidencia. Aqui e depuracao.
+  #
+  # `5` — gate aberto — nao conta como reprovar: o laudo foi emitido e esta no
+  # comentario. Codigo **vazio** conta, porque significa que a verificacao nem
+  # chegou a rodar, e ai o anexo e o que sobra para depurar.
   - publish: evidence
     artifact: evidencia-$(Build.BuildId)
-    condition: always()
+    condition: >-
+      or(failed(),
+         eq(variables['codigo'], ''),
+         and(ne(variables['codigo'], '0'), ne(variables['codigo'], '5')))
     displayName: artefatos
 
   # `5` — gate aberto — nao reprova: falta decisao humana, e quem segura o merge

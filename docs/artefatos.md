@@ -106,9 +106,23 @@ Em nenhum dos três lugares ela é versionada:
 
 | Onde | Retenção |
 |---|---|
-| Pipeline | artefato do job, 30 dias |
+| Pipeline | anexo do job, **só quando reprova** — 30 dias no GitHub, política do projeto no Azure |
 | Repositório de contratos | ignorada pelo `.gitignore` |
 | Aqui | ignorada pelo `.gitignore` |
+
+**No caminho feliz o anexo não sobe.** O laudo já foi commitado ao lado do
+contrato e o corpo dele está no comentário do pull request — 226 KB por
+contrato, por push, duplicariam o que já está no diff. Quando reprova de
+verdade é o oposto: sem proposta válida não há laudo a registrar, e a saída
+bruta do container é o único material que existe. Gate aberto não conta como
+reprovar; código de saída **vazio** conta, porque significa que a verificação
+nem chegou a rodar.
+
+**A retenção não é promessa nossa** — é o padrão da plataforma, e cada
+organização a configura. No Azure DevOps ela nem é do anexo: é da execução
+inteira. Encurtá-la não fere auditoria nenhuma, e a razão está nas duas seções
+seguintes: o que a auditoria abre está versionado ao lado do contrato, e a
+prova do que a ferramenta disse está no `trace/`. O anexo é depuração.
 
 A última linha era a exceção até a evidência acumular 5,3 MB em 27 runs — quinze
 vezes o `trace/`, que tem o dobro de runs. Ignorá-la aqui não é mudança de
