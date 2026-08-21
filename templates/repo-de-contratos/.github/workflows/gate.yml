@@ -38,6 +38,77 @@ jobs:
   decisao:
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v4
+
+      # --- O que esta em decisao ---------------------------------------------
+      #
+      # "Aguardando decisao humana" nao diz **o que** se esta decidindo. Quem
+      # abria o job lia a instrucao de ir ler o laudo em outro lugar, e a
+      # instrucao saia como texto no log — o pior lugar possivel para um ponteiro.
+      #
+      # A fonte e o `.proposta.json` que a esteira **commitou** ao lado do laudo,
+      # e nao uma segunda verificacao: rodar o harness aqui custaria container a
+      # cada clique em rotulo, que e a razao de este workflow existir separado.
+      #
+      # Nem o `report.json` da evidencia: ele vive num artefato de 30 dias e num
+      # outro run, enquanto isto esta versionado ao lado do contrato e e o
+      # proprio documento que o revisor esta aprovando.
+      #
+      # O casamento e por sha256, e nao pelo nome do arquivo: o nome carrega o
+      # sha truncado, e comparar o campo e exato.
+      - name: o que esta em decisao
+        run: |
+          set -eu
+          achou=0
+          {
+            echo "## Pendencias de decisao humana"
+            echo
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          for contrato in $(git ls-files 'contracts/**/contract.odcs.yaml'); do
+            dir=$(dirname "$contrato")
+            sha=$(sha256sum "$contrato" | cut -d' ' -f1)
+
+            proposta=''
+            for p in "$dir"/laudos/*.proposta.json; do
+              [ -f "$p" ] || continue
+              [ "$(jq -r '.contrato_sha256' "$p")" = "$sha" ] || continue
+              proposta="$p"
+              break
+            done
+
+            [ -n "$proposta" ] || continue
+            [ "$(jq '.gate | length' "$proposta")" != "0" ] || continue
+            achou=1
+
+            {
+              echo "### \`$contrato\`"
+              echo
+              jq -r '"Glossario v\(.glossario_versao) · catalogo v\(.catalogo_versao) · pedido \`\(.gate_sha256[0:16])\`"' "$proposta"
+              echo
+              echo "| Tipo | Campo | O que esta em decisao |"
+              echo "|---|---|---|"
+              jq -r '.gate[] | "| \`\(.tipo)\` | \`\(.campo)\` | \(.detalhe) |"' "$proposta"
+              echo
+            } >> "$GITHUB_STEP_SUMMARY"
+          done
+
+          # A ausencia tem duas causas e elas pedem acoes diferentes, entao a
+          # mensagem nao pode ser uma so. O caso comum e corrida: este workflow
+          # responde em segundos e o `contrato` leva minutos, entao no primeiro
+          # run o laudo desta versao **ainda nao foi commitado**.
+          if [ "$achou" = "0" ]; then
+            {
+              echo "Nenhuma pendencia encontrada nos laudos commitados desta versao."
+              echo
+              echo "Se a esteira \`contrato\` ainda esta rodando, o laudo desta versao"
+              echo "ainda nao foi emitido — este passo reavalia quando o rotulo for"
+              echo "aplicado. O laudo completo sai no comentario do pull request."
+              echo
+              echo "[Ver a conversa do pull request](${{ github.event.pull_request.html_url }})"
+            } >> "$GITHUB_STEP_SUMMARY"
+          fi
+
       - name: decisao humana registrada
         env:
           ROTULO: governanca-aprovada
@@ -60,6 +131,21 @@ jobs:
               exit 0
               ;;
           esac
+
+          # O mesmo recado no resumo do job, logo abaixo da tabela que o
+          # passo anterior escreveu — e ali que a pessoa esta olhando, e nao
+          # no log.
+          {
+            echo "---"
+            echo
+            echo "### Aguardando decisao humana"
+            echo
+            echo "Este pull request altera contrato de dados. Para liberar o merge:"
+            echo
+            echo "1. leia o laudo no [comentario da esteira](${{ github.event.pull_request.html_url }}), campo a campo"
+            echo "2. confira a tabela acima — lacuna segue **sem classificacao** no contrato"
+            echo "3. aplique o rotulo `$ROTULO`"
+          } >> "$GITHUB_STEP_SUMMARY"
 
           echo "::error::aguardando decisao humana"
           echo
