@@ -60,6 +60,8 @@ jobs:
         run: |
           set -eu
           achou=0
+          sem_laudo=''
+          limpos=''
           {
             echo "## Pendencias de decisao humana"
             echo
@@ -77,8 +79,18 @@ jobs:
               break
             done
 
-            [ -n "$proposta" ] || continue
-            [ "$(jq '.gate | length' "$proposta")" != "0" ] || continue
+            # Tres estados, e eles pedem tres recados diferentes. Colapsar os
+            # dois primeiros num "nenhuma pendencia" foi o defeito da primeira
+            # versao: ela dizia a mesma coisa para "esta tudo resolvido" e para
+            # "o contrato nem chegou a ser classificado".
+            if [ -z "$proposta" ]; then
+              sem_laudo="$sem_laudo $contrato"
+              continue
+            fi
+            if [ "$(jq '.gate | length' "$proposta")" = "0" ]; then
+              limpos="$limpos $contrato"
+              continue
+            fi
             achou=1
 
             {
@@ -116,15 +128,63 @@ jobs:
           # mensagem nao pode ser uma so. O caso comum e corrida: este workflow
           # responde em segundos e o `contrato` leva minutos, entao no primeiro
           # run o laudo desta versao **ainda nao foi commitado**.
-          if [ "$achou" = "0" ]; then
+          # --- Contrato sem laudo desta versao
+          #
+          # A causa provavel e a que mais importa: a verificacao **reprovou** e
+          # nao chegou a emitir. Nome de arquivo errado, YAML invalido, schema
+          # ODCS recusado — em qualquer um deles o `check` para antes de
+          # classificar, e nao ha o que decidir porque nao ha classificacao.
+          #
+          # Este passo nao tem como saber qual dos dois e: ele nao roda o
+          # harness, de proposito. Entao nomeia os dois e manda ler o comentario
+          # do pull request, que e onde o motivo esta escrito — com o sha256 do
+          # arquivo e a versao da regua que o julgou.
+          if [ -n "$sem_laudo" ]; then
             {
-              echo "Nenhuma pendencia encontrada nos laudos commitados desta versao."
+              echo "### Sem laudo para a versao atual"
               echo
-              echo "Se a esteira \`contrato\` ainda esta rodando, o laudo desta versao"
-              echo "ainda nao foi emitido — este passo reavalia quando o rotulo for"
-              echo "aplicado. O laudo completo sai no comentario do pull request."
+              for c in $sem_laudo; do echo "- \`$c\`"; done
               echo
-              echo "[Ver a conversa do pull request](${{ github.event.pull_request.html_url }})"
+              echo "Duas causas possiveis, e o comentario do pull request diz qual:"
+              echo
+              echo "1. **A verificacao reprovou** e nao emitiu — nome de arquivo,"
+              echo "   YAML ou schema ODCS. O motivo esta no comentario, com o"
+              echo "   sha256 do arquivo e a versao do criterio que o julgou."
+              echo "2. **A esteira \`contrato\` ainda esta rodando** — ela leva"
+              echo "   minutos, este passo leva segundos. Reavalia sozinho quando"
+              echo "   o rotulo for aplicado."
+              echo
+              echo "Aprovar nao conserta contrato invalido: o \`check\` e um"
+              echo "status check proprio, e continua vermelho depois do rotulo."
+              echo
+              echo "[Ver o comentario da esteira](${{ github.event.pull_request.html_url }})"
+              echo
+            } >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+          # --- Contrato classificado, sem ambiguidade
+          #
+          # Nao e "nada a fazer". O gate nao bloqueia porque ha pendencia; ele
+          # bloqueia porque **alterar contrato de dados exige decisao humana
+          # registrada**. Sao duas regras diferentes, e a primeira versao desta
+          # mensagem misturava as duas — dizia "nenhuma pendencia" com o merge
+          # travado, e quem lia nao entendia o que estava sendo pedido.
+          if [ -n "$limpos" ] && [ "$achou" = "0" ]; then
+            {
+              echo "### Nenhuma ambiguidade — e ainda assim precisa de decisao"
+              echo
+              for c in $limpos; do echo "- \`$c\`"; done
+              echo
+              echo "Todo campo casou com o glossario e nenhum contraria decisao"
+              echo "anterior, entao o harness nao tem duvida a levantar."
+              echo
+              echo "O que se pede aqui nao e resolver ambiguidade: e **confirmar o"
+              echo "que o laudo afirma**. Ele diz que campo e dado pessoal, sob"
+              echo "qual base legal e sob qual versao do criterio — e quem responde"
+              echo "pelo dado assina isso, nao a esteira."
+              echo
+              echo "[Ler o laudo no comentario da esteira](${{ github.event.pull_request.html_url }})"
+              echo
             } >> "$GITHUB_STEP_SUMMARY"
           fi
 
