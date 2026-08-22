@@ -46,6 +46,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          # Ver a nota no template: sem historico completo o `git diff` contra a
+          # base sai `fatal: bad revision`, e a selecao de alvos cai no fallback
+          # "verifica todos" sem dizer que caiu.
+          fetch-depth: 0
 
       # Mudar o vocabulario sem subir a `version` dele e o defeito silencioso
       # deste desenho.
@@ -112,9 +117,16 @@ jobs:
           # request que apaga um contrato coloca o caminho apagado na lista, o
           # `check` reprova com "contrato nao existe" (exit 4) e o job fica
           # vermelho por ter feito exatamente o que foi pedido.
-          alterados=$(git diff --name-only --diff-filter=d \
-            "origin/${{ github.base_ref }}...HEAD" \
-            -- 'contracts/**/contract.odcs.yaml' || true)
+          # Sem `|| true`: um `git diff` que **falha** e um `git diff` que devolve
+          # vazio querem coisas opostas, e engolir os dois no mesmo silencio foi o
+          # defeito. Vazio e legitimo — significa que o pull request nao toca
+          # contrato, e ai verificar todos e o certo. Falhar significa que a
+          # comparacao nao aconteceu, e verificar todos vira um custo enorme
+          # escondido atras de uma mensagem que diz outra coisa.
+          if ! alterados=$(git diff --name-only --diff-filter=d                 "origin/${{ github.base_ref }}...HEAD"                 -- 'contracts/**/contract.odcs.yaml'); then
+            echo "::error::nao consegui comparar com origin/${{ github.base_ref }} — o checkout tem historico suficiente? Precisa de \`fetch-depth: 0\`."
+            exit 1
+          fi
 
           # Mudanca em `crates/` ou no vocabulario: o alvo passa a ser **todo**
           # contrato, porque o codigo ou o criterio que os julga pode ter
