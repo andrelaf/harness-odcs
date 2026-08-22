@@ -8,9 +8,17 @@
 # E por isso que a porta entre as duas plataformas custa um arquivo: o que muda
 # e como o resultado e desenhado, nunca o que ele afirma.
 #
-# ATENCAO — este arquivo ainda nao foi exercitado num pipeline real. Ele e a
-# traducao direta do workflow que roda no GitHub, e os pontos onde as duas
-# plataformas divergem estao marcados com `# DIVERGE`.
+# ATENCAO — este arquivo ainda nao foi exercitado num pipeline real, e isso
+# pesa mais do que parece: a versao do GitHub, tambem "revisada e nunca
+# executada", trazia tres defeitos que so apareceram no primeiro run — crase
+# escapada dentro de um filtro `jq`, `runner.temp` num escopo onde o contexto
+# nao existe, e clone raso derrubando a selecao de alvos em silencio. Nenhum era
+# visivel lendo o arquivo.
+#
+# Trate o que esta aqui como estrutura correta, nao como codigo testado.
+#
+# Os pontos onde as duas plataformas divergem estao marcados com `# DIVERGE`. A
+# que mais custa esta no passo `resumo`: **nao ha comentario no pull request**.
 
 trigger: none
 
@@ -44,6 +52,11 @@ steps:
   - checkout: self
     # DIVERGE: necessario para o passo que commita o laudo de volta na branch.
     persistCredentials: true
+    # O passo `contratos alterados` compara com a base, e num clone raso nao ha
+    # merge-base — a comparacao sai `fatal: bad revision` e a selecao de alvos
+    # degrada para "verifica todos" sem dizer que degradou. No GitHub isso
+    # aconteceu de verdade, em todo pull request, ate alguem medir.
+    fetchDepth: 0
 
   # --- 1. A ferramenta ---------------------------------------------------
   #
@@ -119,53 +132,148 @@ steps:
   - script: "$(Agent.TempDirectory)/harness-odcs/scripts/imagem.sh"
     displayName: preparar o motor de validacao
 
-  # --- 3. A verificacao --------------------------------------------------
+  # --- 3. Os alvos --------------------------------------------------------
+  #
+  # O `check` **recusa escolher sozinho** quando ha mais de um contrato e
+  # ninguem passou `--contrato`: sai `4`, e antes de escrever o `--saida`. E a
+  # decisao certa — adivinhar qual contrato classificar seria errar em silencio
+  # —, mas significa que a esteira precisa escolher, e ate agora este arquivo
+  # nao escolhia. Com dois contratos no repositorio ele saia `4` sempre.
+  #
+  # DIVERGE: a base do pull request vem de `System.PullRequest.TargetBranch`, no
+  # formato `refs/heads/main`. O GitHub entrega `github.base_ref` ja sem prefixo.
+  - script: |
+      set -eu
+      base="$(System.PullRequest.TargetBranch)"
+      base="${base#refs/heads/}"
+      git fetch --quiet origin "$base"
+
+      # Sem `|| true`: falhar e devolver vazio querem coisas opostas. Vazio e
+      # legitimo — o pull request nao toca contrato, o que mudou foi codigo ou
+      # criterio, e ai verificar todos e o certo. Falhar significa que a
+      # comparacao nao aconteceu, e verificar todos vira custo escondido atras
+      # de uma mensagem que afirma outra coisa.
+      if ! alterados=$(git diff --name-only --diff-filter=d             "origin/$base...HEAD" -- 'contracts/**/contract.odcs.yaml'); then
+        echo "##vso[task.logissue type=error]nao consegui comparar com origin/$base — o checkout tem historico suficiente? Precisa de fetchDepth: 0"
+        exit 1
+      fi
+
+      # `--diff-filter=d` exclui o que foi **removido**. Sem ele um pull request
+      # que apaga um contrato coloca o caminho apagado na lista, o `check`
+      # reprova com "contrato nao existe" e o job fica vermelho por ter feito
+      # exatamente o que foi pedido.
+      if [ -z "$alterados" ]; then
+        alterados=$(find contracts -name contract.odcs.yaml | sort)
+        echo "nenhum contrato no diff — verificando todos, o criterio pode ter mudado"
+      fi
+      [ -n "$alterados" ] || { echo "repositorio sem contratos"; exit 1; }
+
+      echo "$alterados"
+      echo "$alterados" > "$(Agent.TempDirectory)/alvos.txt"
+    displayName: contratos alterados
+
+  # --- 4. Verificar e emitir, contrato a contrato -------------------------
   #
   # `--formato azure` emite `##vso[task.logissue ...]`, que prende a anotacao ao
   # arquivo em vez de deixa-la no log do job. E o irmao de `--formato github`, e
   # a unica diferenca entre as duas plataformas: a politica, o veredito e o
   # `report.json` sao os mesmos.
-  - script: |
-      set +e
-      "$(Agent.TempDirectory)/harness-odcs/harness.sh" check \
-        --formato azure --saida "$(Agent.TempDirectory)/report.json"
-      echo "##vso[task.setvariable variable=codigo]$?"
-    displayName: verificar contrato
-
-  # --- 4. Emitir o laudo -------------------------------------------------
   #
   # DIVERGE: a identidade que commita e a conta de build do projeto, e ela
   # precisa de "Contribute" na branch. No GitHub isso e `contents: write`.
   - script: |
-      set -eu
-      pendente=$(jq -r '[.defeitos[] | select(.etapa == "aplicacao")] | length' \
-        "$(Agent.TempDirectory)/report.json")
-      [ "$pendente" = "0" ] && { echo "laudo ja emitido"; exit 0; }
-
-      "$(Agent.TempDirectory)/harness-odcs/harness.sh" aplicar
-      git add contracts/
-      git diff --cached --quiet && exit 0
+      set -u
+      HARNESS="$(Agent.TempDirectory)/harness-odcs/harness.sh"
+      TMP="$(Agent.TempDirectory)"
+      pior=0
+      emitiu=nao
+      : > "$TMP/comentario.md"
 
       git config user.name  "contrato-bot"
       git config user.email "contrato-bot@$(Build.Repository.Name)"
+
+      while IFS= read -r alvo; do
+        [ -n "$alvo" ] || continue
+        echo "== $alvo =="
+        relatorio="$TMP/report-$(echo "$alvo" | tr '/' '-').json"
+
+        set +e
+        "$HARNESS" check --contrato "$alvo" --formato azure --saida "$relatorio"
+        codigo=$?
+        set -e
+
+        # Pendencia de aplicacao e o sinal de que o laudo desta versao ainda nao
+        # existe. `aplicar` e idempotente, mas custa container — so roda quando
+        # ha o que escrever.
+        if [ -f "$relatorio" ]; then
+          pendente=$(jq -r '[.defeitos[] | select(.etapa == "aplicacao")] | length' "$relatorio")
+          if [ "$pendente" != "0" ]; then
+            set +e
+            "$HARNESS" aplicar --contrato "$alvo"
+            set -e
+            emitiu=sim
+            "$HARNESS" check --contrato "$alvo" --formato azure --saida "$relatorio"
+            codigo=$?
+          fi
+          # O desenho sai do relatorio gravado, e nao de uma terceira
+          # verificacao: 99,6% do custo medido e partida de container.
+          "$HARNESS" report "$relatorio" --formato markdown >> "$TMP/comentario.md"
+          echo >> "$TMP/comentario.md"
+        else
+          # `check` nem chegou a julgar — erro de ambiente ou de uso. Dizer isso
+          # e melhor que um resumo sem a linha do contrato.
+          {
+            echo "### \`$alvo\`"
+            echo
+            echo "A verificacao nao produziu relatorio (exit \`$codigo\`). Veja o log do job."
+            echo
+          } >> "$TMP/comentario.md"
+        fi
+
+        # O pior veredito manda: um contrato reprovado nao fica escondido atras
+        # de outro que passou. `4` (erro) tem precedencia sobre `1` (reprovou),
+        # que tem sobre `5` (aguarda decisao).
+        case "$codigo" in
+          4) pior=4 ;;
+          1) [ "$pior" = 4 ] || pior=1 ;;
+          5) [ "$pior" = 0 ] && pior=5 ;;
+        esac
+      done < "$TMP/alvos.txt"
+
+      echo "##vso[task.setvariable variable=codigo]$pior"
+      echo "##vso[task.setvariable variable=emitiu]$emitiu"
+    displayName: verificar e emitir
+
+  # O commit acontece **antes** da aprovacao, de proposito. Depois dela, o push
+  # derrubaria a revisao recem-dada e o mesmo conteudo exigiria duas aprovacoes.
+  - script: |
+      set -eu
+      git add contracts/
+      git diff --cached --quiet && { echo "nada a commitar"; exit 0; }
       git commit -m "chore: laudo de classificacao emitido pela esteira"
       git push origin "HEAD:$(System.PullRequest.SourceBranch)"
+    displayName: commitar o laudo
+    condition: and(succeeded(), eq(variables['emitiu'], 'sim'))
 
-      # O push nao dispara um pipeline novo em nenhuma das duas plataformas —
-      # entao a verificacao do que acabou de ser escrito acontece aqui mesmo.
-      "$(Agent.TempDirectory)/harness-odcs/harness.sh" check \
-        --formato azure --saida "$(Agent.TempDirectory)/report.json" || true
-    displayName: emitir o laudo
-    condition: succeeded()
-
-  # --- 5. O resultado ----------------------------------------------------
+  # --- 5. O resultado -----------------------------------------------------
   #
-  # DIVERGE: o comentario no pull request sai pela REST de *pull request
-  # threads*, e nao por um `gh pr comment`. O corpo e o mesmo `--formato
-  # markdown`.
+  # DIVERGE, e esta e a divergencia que mais custa: **nao ha comentario no pull
+  # request.** No GitHub o laudo inteiro vai no comentario, que e onde o revisor
+  # ja esta olhando. Aqui ele vai para o resumo do job, que exige um clique a
+  # mais.
+  #
+  # Postar exigiria a REST de *pull request threads* com o token do build, e
+  # escrever isso sem nunca poder executar contra um projeto real seria repetir
+  # o erro que este arquivo ja cometeu tres vezes: codigo revisado, nunca rodado,
+  # defeituoso na primeira execucao. Fica anotado como o primeiro passo de quem
+  # adotar o Azure de verdade.
+  #
+  # O corpo ja esta montado — e a concatenacao dos laudos de todos os contratos,
+  # produzida pelo passo anterior. So falta para onde mandar.
   - script: |
-      "$(Agent.TempDirectory)/harness-odcs/harness.sh" report \
-        "$(Agent.TempDirectory)/report.json" --formato markdown > "$(Agent.TempDirectory)/comentario.md"
+      if [ ! -s "$(Agent.TempDirectory)/comentario.md" ]; then
+        echo "sem relatorio — a verificacao nao chegou a rodar" > "$(Agent.TempDirectory)/comentario.md"
+      fi
       echo "##vso[task.uploadsummary]$(Agent.TempDirectory)/comentario.md"
     displayName: resumo
     condition: always()
