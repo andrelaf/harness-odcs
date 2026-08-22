@@ -57,6 +57,14 @@ jobs:
       - uses: actions/checkout@v4
         with:
           ref: ${{ github.head_ref }}
+          # `fetch-depth: 0` porque o passo `contratos alterados` compara com a
+          # base: num clone raso nao ha merge-base, e `origin/main...HEAD` sai
+          # `fatal: bad revision`. O erro era engolido pelo `|| true` e o job
+          # caia no fallback "verifica todos" — silenciosamente, em **todo**
+          # pull request. Num repositorio com 200 contratos isso e uma partida
+          # de container por contrato, por push, para verificar o que ninguem
+          # tocou.
+          fetch-depth: 0
 
       # Onde esta o criterio, para todos os passos de uma vez. O pacote da
       # ferramenta nao carrega mais o vocabulario, e sem esta variavel o harness
@@ -202,7 +210,16 @@ jobs:
         id: alvos
         run: |
           git fetch --quiet origin "${{ github.base_ref }}"
-          alterados=$(git diff --name-only --diff-filter=d             "origin/${{ github.base_ref }}...HEAD"             -- 'contracts/**/contract.odcs.yaml' || true)
+          # Sem `|| true`: um `git diff` que **falha** e um `git diff` que devolve
+          # vazio querem coisas opostas, e engolir os dois no mesmo silencio foi o
+          # defeito. Vazio e legitimo — significa que o pull request nao toca
+          # contrato, e ai verificar todos e o certo. Falhar significa que a
+          # comparacao nao aconteceu, e verificar todos vira um custo enorme
+          # escondido atras de uma mensagem que diz outra coisa.
+          if ! alterados=$(git diff --name-only --diff-filter=d                 "origin/${{ github.base_ref }}...HEAD"                 -- 'contracts/**/contract.odcs.yaml'); then
+            echo "::error::nao consegui comparar com origin/${{ github.base_ref }} — o checkout tem historico suficiente? Precisa de \`fetch-depth: 0\`."
+            exit 1
+          fi
 
           # Mudanca so no workflow ou no pin: o alvo passa a ser **todo**
           # contrato, porque o criterio que os julga pode ter mudado.
